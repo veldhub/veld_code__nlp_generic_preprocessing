@@ -1,0 +1,34 @@
+x-veld:
+  code:
+    description:
+    topic:
+    additional:
+
+    input:
+      - volume: /veld/input/
+        file_type:
+        content:
+        environemnt_var:
+
+    output:
+      - volume: /veld/output/
+        file_type:
+        content:
+        environemnt_var:
+
+    config:
+      - environemnt_var:
+        description:
+        var_type:
+        default:
+        optional:
+
+services:
+  veld:
+    build: .
+    command: python /veld/code/REPLACE.py
+    volumes:
+      - ./src/:/veld/code/
+    environment:
+      REPLACE: 
+
