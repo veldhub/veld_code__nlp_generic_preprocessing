@@ -1,0 +1,69 @@
+x-veld:
+  code:
+    description: "Removes lines that don't reach a threshold regarding the ratio of textual content 
+      to non-textual (numbers, special characters) content. Splits output into clean and dirty 
+      file."
+    topic: 
+      - "NLP"
+      - "Preprocessing"
+      - "ETL"
+
+    input:
+      - volume: /veld/input/
+        environment_var: in_file
+        file_type: "txt"
+        content: "raw text"
+
+    output:
+      - volume: /veld/output/
+        environment_var: out_file_clean
+        description: "clean lines, where each line's ratio is above the configured threshold"
+        file_type: "txt"
+        content: "raw text"
+      - volume: /veld/output/
+        environment_var: out_file_dirty
+        description: "dirty lines, where each line's ratio is below the configured threshold"
+        file_type: "txt"
+        content: "raw text"
+
+    config:
+      - environment_var: min_percentage_char
+        description: "threshold above which a line is considered clean. E.g. 80 means 80% of
+          character of a line must be textual"
+        var_type: "int"
+      - environment_var: out_data_description
+        description: "automatic data description for generating a data veld yaml file"
+        var_type: "str" 
+      - environment_var: cpu_count
+        description: "number of cpu cores allocated to this processing. Defaults to maximum number
+          of available cores"
+        var_type: "int"
+      - environment_var: buffer_segments
+        description: "percentage of segments where processing results are persisted in between. So
+          that processing could continue should it have crashed"
+        var_type: "int"
+        default: 100
+      - environment_var: sleep_duration
+        description: "number of seceonds between each multiprocess invokation, since with big data,
+          a memory race condition can occurr. To work-around this, a small waiting period in between
+          can be set with this variable."
+        var_type: "int"
+        default: 10
+
+services:
+  veld_preprocess_clean:
+    build: .
+    volumes:
+      - ./src/:/veld/code/:z
+    command: python3 /veld/code/preprocess_clean.py
+    environment:
+      in_file: null
+      out_file_clean: null
+      out_file_dirty: null
+      out_data_veld_yaml: null
+      min_percentage_char: null
+      out_data_description: null
+      cpu_count: null
+      buffer_segments: 100
+      sleep_duration: 10
+

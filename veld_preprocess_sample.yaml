@@ -1,0 +1,51 @@
+x-veld:
+  code:
+    description: "takes a random sample of lines from a txt file. Randomness can be set with a seed
+      too"
+    topic: 
+      - "NLP"
+      - "Preprocessing"
+      - "ETL"
+
+    input:
+      - volume: /veld/input/
+        environment_var: in_txt_file
+        file_type: "txt"
+        content: "raw text"
+
+    output:
+      - volume: /veld/output/
+        environment_var: out_txt_file 
+        file_type: "txt"
+        content: "raw text"
+
+    config:
+      - environment_var: out_data_description
+        description: "automatic data description for generating a data veld yaml file"
+        var_type: "str" 
+      - environment_var: percentage_sample
+        description: "percentage of lines to be randomly sampled"
+        var_type: "int"
+      - environment_var: sample_random_seed
+        description: "seed to make randomness stable and reproducible"
+        var_type: "str"
+      - environment_var: buffer_segments
+        description: "percentage of segments where processing results are persisted in between. So
+          that processing could continue should it have crashed"
+        var_type: "int"
+        default: 100
+
+services:
+  veld_preprocess_sample:
+    build: .
+    volumes:
+      - ./src/:/veld/code/:z
+    command: python3 /veld/code/preprocess_sample.py
+    environment:
+      in_file: null
+      out_file: null
+      out_data_description: null
+      percentage_sample: null
+      sample_random_seed: null
+      buffer_segments: 100
+
