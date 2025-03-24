@@ -158,11 +158,9 @@ def merge_tmp(tmp_folder, out_file_path):
     print("joining tmp files into one.")
     with open(out_file_path, "w") as f_out:
         for tmp_file_path in [tmp_folder + "/" + f for f in os.listdir(tmp_folder)]:
-            if not tmp_file_path.endswith("_i_end.txt"):
-                print(f"writing content from {tmp_file_path}")
-                with open(tmp_file_path, "r") as f_in:
-                    for line in f_in:
-                        f_out.write(line)
+            with open(tmp_file_path, "r") as f_in:
+                for line in f_in:
+                    f_out.write(line)
 
 
 def main_process_single(
@@ -186,7 +184,7 @@ def main_process_single(
         func_writing = func_writing_txt
 
     with open(config_reading.in_file_path, "r") as in_file:
-        print("- processing --------------------------------------------")
+        print("- processing ---------------------------------------------")
         if config_processing.cpu_count > 1:
             print(f"process_id: {process_id}")
             if type(config_writing) is ConfigWritingTxt:
@@ -239,14 +237,14 @@ def main_process_multi(config_processing, config_reading, config_writing):
         sleep(config_processing.sleep_duration)
     for process in process_list:
         process.join()
+    print("- processing done --------------------------------------------------")
     if config_processing.cpu_count > 1:
         merge_tmp(tmp_folder, config_writing.out_file_path)
 
 
 def main():
 
-    print("- reading configuration --------------------------------------------")
-
+    print("- reading configuration ---------------------------------------------")
     config_processing = get_config_processing()
     config_reading = get_config_reading()
     config_writing = get_config_writing()
