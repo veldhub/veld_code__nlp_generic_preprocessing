@@ -34,13 +34,6 @@ class ConfigProcessing:
 class ConfigProcessingChangeCase(ConfigProcessing):
     set_case: str = None
 
-    def __init__(self, set_case, **kwargs):
-        super().__init__(**kwargs)
-        if set_case not in ["lower", "upper"]:
-            # TODO
-            raise Exception("")
-        self.set_case = set_case
-
 
 @dataclass
 class ConfigProcessingClean(ConfigProcessing):
@@ -237,18 +230,18 @@ def main_process_single(
     tmp_folder,
     segment_start_end, 
 ):
-    i_start = segment_start_end[0]
-    i_end = segment_start_end[1]
     
+    # load matching functions
     if type(config_reading) is ConfigReadingTxt:
         func_reading = func_reading_txt
-
     if type(config_processing) is ConfigProcessingChangeCase:
         func_processing = func_processing_change_case
-
     if type(config_writing) is ConfigWritingTxt:
         func_writing = func_writing_txt
 
+    # main single core processing
+    i_start = segment_start_end[0]
+    i_end = segment_start_end[1]
     with open(config_reading.in_file_path, "r") as in_file:
         print(f"- process_id: {process_id}: start ----------------------------------------------")
         if config_processing.cpu_count > 1:
@@ -272,15 +265,13 @@ def main_process_single(
 
 
 def main_process_multi(config_processing, config_reading, config_writing):
-
+    print("- all processing start ----------------------------------------------")
     segment_start_end_list = create_segment_start_end_list_of_in_file(
         config_reading, 
         config_processing.cpu_count
     )
     process_list = []
     tmp_folder = "/tmp/"
-
-    print("- all processing start ----------------------------------------------")
     for process_id, segment_start_end in enumerate(segment_start_end_list):
         # main_process_single(
         #     process_id, 
@@ -324,11 +315,13 @@ def adapt_config_to_file_type(config_reading, config_writing):
 
 def main():
 
+    # config reading
     print("- preparing --------------------------------------------------------")
     config_processing = get_config_processing()
     config_reading = get_config_reading()
     config_writing = get_config_writing()
 
+    # config adaptions and calling into main_process_multi
     if config_reading.in_file_path and config_writing.out_file_path:
         config_reading, config_writing = adapt_config_to_file_type(config_reading, config_writing)
         main_process_multi(config_processing, config_reading, config_writing)
@@ -343,10 +336,8 @@ def main():
             main_process_multi(config_processing, config_reading, config_writing)
         config_reading.in_file_path = None
         config_writing.out_file_path = None
-    else:
-        # TODO
-        raise Exception("")
 
+    # write metadata
     if config_writing.out_metadata_file_path:
         write_veld_data_yaml(config_writing)
 
