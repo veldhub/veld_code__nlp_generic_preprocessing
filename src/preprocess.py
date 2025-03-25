@@ -37,7 +37,7 @@ class ConfigProcessingChangeCase(ConfigProcessing):
 
 @dataclass
 class ConfigProcessingClean(ConfigProcessing):
-    threshold: float = None
+    min_char_percentage: int | float = None
 
 
 @dataclass
@@ -122,6 +122,11 @@ def get_config_processing():
             **asdict(config_processing),
             set_case=get_env_var("set_case"),
         )
+    elif processing_func_name == "clean":
+        config_processing = ConfigProcessingClean(
+            **asdict(config_processing),
+            min_char_percentage=get_env_var("min_char_percentage"),
+        )
     return config_processing
 
 
@@ -143,8 +148,30 @@ def func_processing_change_case(text, config_processing):
     return text_processed
 
 
-def func_processing_clean(text, config_processing):
-    pass
+def func_processing_clean(text, set_write_clean):
+    count_clean = 0
+    count_dirty = 0
+    for char in text:
+        cat = unicodedata.category(char)
+        if cat.startswith("L") or cat.startswith("Z"):
+            count_clean += 1
+        else:
+            count_dirty += 1
+    percentage_char = (100 * count_clean)  / (count_clean + count_dirty)
+    is_text_clean = percentage_char >= MIN_PERCENTAGE_CHAR
+    if (is_text_clean and set_write_clean) or (not is_text_clean and not set_write_clean):
+        text_to_write = text
+    elif (is_text_clean and not set_write_clean) or (not is_text_clean and set_write_clean):
+        text_to_write = ""
+    return text_to_write
+
+
+def func_processing_clean_clean(text):
+    return process_text(text, True)
+
+
+def func_processing_clean_dirty(text):
+    return process_text(text, False)
 
 
 def func_writing_txt(text, f_out):
@@ -236,6 +263,8 @@ def main_process_single(
         func_reading = func_reading_txt
     if type(config_processing) is ConfigProcessingChangeCase:
         func_processing = func_processing_change_case
+    elif type(config_processing) is ConfigProcessingClean:
+        func_processing = func_processing_clean
     if type(config_writing) is ConfigWritingTxt:
         func_writing = func_writing_txt
 
@@ -265,6 +294,7 @@ def main_process_single(
 
 
 def main_process_multi(config_processing, config_reading, config_writing):
+    DEBUG_SINGLE_PROCESS = True
     print("- all processing start ----------------------------------------------")
     segment_start_end_list = create_segment_start_end_list_of_in_file(
         config_reading, 
@@ -273,18 +303,8 @@ def main_process_multi(config_processing, config_reading, config_writing):
     process_list = []
     tmp_folder = "/tmp/"
     for process_id, segment_start_end in enumerate(segment_start_end_list):
-        # main_process_single(
-        #     process_id, 
-        #     config_processing,
-        #     config_reading,
-        #     config_writing,
-        #     tmp_folder,
-        #     segment_start_end, 
-        # )
-        # sleep(config_processing.sleep_duration)
-        process = Process(
-            target=main_process_single,
-            args=(
+        if DEBUG_SINGLE_PROCESS:
+            main_process_single(
                 process_id, 
                 config_processing,
                 config_reading,
@@ -292,12 +312,24 @@ def main_process_multi(config_processing, config_reading, config_writing):
                 tmp_folder,
                 segment_start_end, 
             )
-        )
-        process.start()
-        process_list.append(process)
-        sleep(config_processing.sleep_duration)
-    for process in process_list:
-        process.join()
+        else:
+            process = Process(
+                target=main_process_single,
+                args=(
+                    process_id, 
+                    config_processing,
+                    config_reading,
+                    config_writing,
+                    tmp_folder,
+                    segment_start_end, 
+                )
+            )
+            process.start()
+            process_list.append(process)
+            sleep(config_processing.sleep_duration)
+    if not DEBUG_SINGLE_PROCESS:
+        for process in process_list:
+            process.join()
     print("- all processing done -----------------------------------------------")
     if config_processing.cpu_count > 1:
         merge_tmp(tmp_folder, config_writing.out_file_path)
@@ -344,3 +376,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

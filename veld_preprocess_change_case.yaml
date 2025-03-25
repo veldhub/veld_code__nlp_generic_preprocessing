@@ -28,7 +28,7 @@ services:
     build: .
     volumes:
       - ./src/:/veld/code/:z
-    command: python /veld/code/preprocess.py change_case
+    command: python -u /veld/code/preprocess.py change_case
     environment:
       in_file: null
       out_file: null
@@ -36,5 +36,4 @@ services:
       set_case: null
       cpu_count: 1
       sleep_duration: 0
-
 
