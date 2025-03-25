@@ -250,8 +250,7 @@ def main_process_single(
         func_writing = func_writing_txt
 
     with open(config_reading.in_file_path, "r") as in_file:
-        print("- processing --------------------------------------------------------")
-        print(f"process_id: {process_id}: start")
+        print(f"- process_id: {process_id}: start ----------------------------------------------")
         if config_processing.cpu_count > 1:
             if type(config_writing) is ConfigWritingTxt:
                 out_file_path = tmp_folder + str(process_id) + ".txt"
@@ -269,6 +268,7 @@ def main_process_single(
                     print(f"process_id: {process_id}: at {percentage_current}%")
                 text_processed = func_processing(text, config_processing)
                 func_writing(text_processed, out_file)
+    print(f"- process_id: {process_id}: done -----------------------------------------------")
 
 
 def main_process_multi(config_processing, config_reading, config_writing):
@@ -280,6 +280,7 @@ def main_process_multi(config_processing, config_reading, config_writing):
     process_list = []
     tmp_folder = "/tmp/"
 
+    print("- all processing start ----------------------------------------------")
     for process_id, segment_start_end in enumerate(segment_start_end_list):
         # main_process_single(
         #     process_id, 
@@ -306,7 +307,7 @@ def main_process_multi(config_processing, config_reading, config_writing):
         sleep(config_processing.sleep_duration)
     for process in process_list:
         process.join()
-    print("- processing done ---------------------------------------------------")
+    print("- all processing done -----------------------------------------------")
     if config_processing.cpu_count > 1:
         merge_tmp(tmp_folder, config_writing.out_file_path)
 
