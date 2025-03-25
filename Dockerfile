@@ -6,6 +6,6 @@ RUN pip install ipdb==0.13.13
 RUN pip install PyYAML==6.0.2
 RUN pip install spacy==3.8.4
 RUN pip install nltk==3.9.1
-RUN python -m spacy download de_core_news_sm
+#RUN python -m spacy download de_core_news_sm
 WORKDIR /veld/code/
 
