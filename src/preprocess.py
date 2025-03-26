@@ -130,6 +130,10 @@ def get_config_processing():
     return config_processing
 
 
+def get_func_reading(config_reading):
+    return func_reading
+
+
 def func_reading_txt(f_in, i_start, i_end):
     for i_line, line in enumerate(f_in):
         if i_line >= i_start:
@@ -137,6 +141,24 @@ def func_reading_txt(f_in, i_start, i_end):
                 yield (i_line, line)
             else:
                 break
+
+
+def func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing, process_id, in_file):
+    for i_text, text in func_reading(config_reading):
+        percentage_current = percentage_segment_dict.get(i_text)
+        if percentage_current:
+            print(f"process_id: {process_id}: at {percentage_current}%")
+        text_processed = func_processing(text, config_processing)
+        yield text_processed
+
+
+def func_shared_processing_simple(config_processing, config_reading, config_writing, process_id):
+    func_processing = get_func_processing(config_processing)
+    func_reading = get_func_reading(config_reading)
+    func_writing = get_func_writing(config_writing)
+    with open(config_reading.in_file_path, "r") as in_file, open(out_file_path, "w") as out_file:
+        for text_processed in func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing, in_file):
+            func_writing(text_processed, config_writing, out_file)
 
 
 def func_processing_change_case(text, config_processing):
@@ -148,7 +170,14 @@ def func_processing_change_case(text, config_processing):
     return text_processed
 
 
-def func_processing_clean(text, set_write_clean):
+def func_processing_clean_individual(text, config_processing):
+
+    def func_processing_clean_clean(text):
+        return process_text(text, True)
+
+    def func_processing_clean_dirty(text):
+        return process_text(text, False)
+
     count_clean = 0
     count_dirty = 0
     for char in text:
@@ -166,12 +195,20 @@ def func_processing_clean(text, set_write_clean):
     return text_to_write
 
 
-def func_processing_clean_clean(text):
-    return process_text(text, True)
-
-
-def func_processing_clean_dirty(text):
-    return process_text(text, False)
+def func_processing_clean(text, config_processing, config_reading, config_writing, process_id):
+    config_writing_clean = config_writing.config_writing_clean
+    config_writing_dirty = config_writing.config_writing_dirty
+    func_reading = get_func_reading(config_reading)
+    func_writing_clean = get_func_writing(config_writing_clean)
+    func_writing_dirty = get_func_writing(config_writing_dirty)
+    with (
+        open(config_reading.in_file_path, "r") as in_file, 
+        open(config_writing_clean.out_file_path, "w") as out_file_clean, 
+        open(config_writing_dirty.out_file_path, "w") as out_file_dirty,
+    ):
+        for text_processed in func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing):
+            func_writing_clean(text_processed_clean, config_writing_clean)
+            func_writing_dirty(text_processed_dirty, config_writing_dirty)
 
 
 def func_writing_txt(text, f_out):
@@ -249,47 +286,55 @@ def write_veld_data_yaml(config_writing):
         yaml.dump(veld_data_yaml, f, sort_keys=False)
 
 
+
+def get_percentage_segment_dict(i_start, i_end):
+    print_segments = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
+    print_segments = [e + i_start - 1 for s,e in print_segments]
+    print_segments_dict = {}
+    for percentage, i_segment in enumerate(print_segments, start=1):
+        print_segments_dict[i_segment] = percentage
+
+
 def main_process_single(
     process_id, 
     config_processing,
     config_reading,
     config_writing,
-    tmp_folder,
-    segment_start_end, 
+    # tmp_folder,
+    # segment_start_end, 
 ):
-    
-    # load matching functions
-    if type(config_reading) is ConfigReadingTxt:
-        func_reading = func_reading_txt
-    if type(config_processing) is ConfigProcessingChangeCase:
-        func_processing = func_processing_change_case
-    elif type(config_processing) is ConfigProcessingClean:
-        func_processing = func_processing_clean
-    if type(config_writing) is ConfigWritingTxt:
-        func_writing = func_writing_txt
+    print(f"- process_id: {process_id}: start ----------------------------------------------")
 
-    # main single core processing
-    i_start = segment_start_end[0]
-    i_end = segment_start_end[1]
-    with open(config_reading.in_file_path, "r") as in_file:
-        print(f"- process_id: {process_id}: start ----------------------------------------------")
-        if config_processing.cpu_count > 1:
-            if type(config_writing) is ConfigWritingTxt:
-                out_file_path = tmp_folder + str(process_id) + ".txt"
-        else:
-            out_file_path = config_writing.out_file_path
-        with open(out_file_path, "w") as out_file:
-            print_intervals = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
-            print_intervals = [e + i_start - 1 for s,e in print_intervals]
-            print_intervals_dict = {}
-            for percentage, i_interval in enumerate(print_intervals, start=1):
-                print_intervals_dict[i_interval] = percentage
-            for i_text, text in func_reading(in_file, i_start, i_end):
-                percentage_current = print_intervals_dict.get(i_text)
-                if percentage_current:
-                    print(f"process_id: {process_id}: at {percentage_current}%")
-                text_processed = func_processing(text, config_processing)
-                func_writing(text_processed, out_file)
+    if type(config_processing) is ConfigProcessingChangeCase:
+        func_shared_processing_simple(config_processing, config_reading, config_writing)
+    elif type(config_processing) is ConfigProcessingClean:
+        func_processing_clean(config_processing, config_reading, config_writing)
+
+    # load matching functions
+    # if type(config_reading) is ConfigReadingTxt:
+    #     func_reading = func_reading_txt
+    # if type(config_processing) is ConfigProcessingChangeCase:
+    #     func_processing = func_processing_change_case
+    # elif type(config_processing) is ConfigProcessingClean:
+    #     func_processing = func_processing_clean
+    # if type(config_writing) is ConfigWritingTxt:
+    #     func_writing = func_writing_txt
+    # 
+    # # main single core processing
+    # i_start = segment_start_end[0]
+    # i_end = segment_start_end[1]
+    # percentage_segment_dict = get_percentage_segment_dict(i_start, i_end)
+    # if config_processing.cpu_count > 1:
+    #     if type(config_writing) is ConfigWritingTxt:
+    #         out_file_path = tmp_folder + str(process_id) + ".txt"
+    # else:
+    #     out_file_path = config_writing.out_file_path
+    # with open(config_reading.in_file_path, "r") as in_file, open(out_file_path, "w") as out_file:
+    #     for i_text, text in func_reading(in_file, i_start, i_end):
+    #         percentage_current = percentage_segment_dict.get(i_text)
+    #         if percentage_current:
+    #             print(f"process_id: {process_id}: at {percentage_current}%")
+    #         func_processing(text, config_processing, func_writing, out_file)
     print(f"- process_id: {process_id}: done -----------------------------------------------")
 
 
