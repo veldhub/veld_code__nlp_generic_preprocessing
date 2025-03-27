@@ -38,6 +38,11 @@ class ConfigProcessingChangeCase(ConfigProcessing):
 
 
 @dataclass
+class ConfigProcessingRegexReplace(ConfigProcessing):
+    regex_sub: Tuple[str, str] = None
+
+
+@dataclass
 class ConfigProcessingClean(ConfigProcessing):
     min_char_percentage: int | float = None
 
@@ -46,16 +51,20 @@ class ConfigProcessingClean(ConfigProcessing):
 class ConfigWriting:
     out_folder: str = None
     out_file_path: str = None
-    out_metadata_folder: str = None
-    out_metadata_file_path: str = None
-    out_metadata_description: str = None
-    out_metadata_topic: str | list[str] = None
-    out_metadata_content: str | list[str] = None
 
 
 @dataclass
 class ConfigWritingTxt(ConfigWriting):
     pass
+
+
+@dataclass
+class ConfigWritingMetadata():
+    out_metadata_folder: str = None
+    out_metadata_file_path: str = None
+    out_metadata_description: str = None
+    out_metadata_topic: str | list[str] = None
+    out_metadata_content: str | list[str] = None
 
 
 def get_env_var(var_name, cast_func=None):
@@ -95,21 +104,27 @@ def get_config_writing():
         out_file_path = OUT_FOLDER + out_file
     else:
         out_file_path = None
+    config_writing = ConfigWriting(
+        out_folder=OUT_FOLDER,
+        out_file_path=out_file_path,
+    )
+    return config_writing
+
+
+def get_config_writing_metadata():
     out_metadata_file = get_env_var("out_metadata_file")
     if out_metadata_file:
         out_metadata_file_path = OUT_METADATA_FOLDER + out_metadata_file
     else:
-        out_metadata_file_path = None
-    config_writing = ConfigWriting(
-        out_folder=OUT_FOLDER,
-        out_file_path=out_file_path,
+        out_metadata_file = None
+    config_writing_metadata = ConfigWritingMetadata(
         out_metadata_folder=OUT_METADATA_FOLDER,
         out_metadata_file_path=out_metadata_file_path,
         out_metadata_description=get_env_var("out_metadata_description"),
         out_metadata_topic=get_env_var_to_list("out_metadata_topic"),
         out_metadata_content=get_env_var_to_list("out_metadata_content"),
     )
-    return config_writing
+    return config_writing_metadata
 
 
 def get_config_processing():
@@ -124,6 +139,11 @@ def get_config_processing():
             **asdict(config_processing),
             set_case=get_env_var("set_case"),
         )
+    elif processing_func_name == "remove_punctuation":
+        config_processing = ConfigProcessingRegexReplace(
+            **asdict(config_processing),
+            regex_sub=(r"[^\w\s]", "")
+        )
     elif processing_func_name == "clean":
         config_processing = ConfigProcessingClean(
             **asdict(config_processing),
@@ -132,38 +152,64 @@ def get_config_processing():
     return config_processing
 
 
+def get_filetype_of_config(config_reading_or_writing):
+    if type(config_reading_or_writing) in [ConfigReadingTxt, ConfigWritingTxt]:
+        return "txt"
+
+
 def get_func_reading(config_reading):
-    return func_reading
+    if type(config_reading) is ConfigReadingTxt:
+        return func_reading_txt
 
 
-def func_reading_txt(config_reading, f_in):
+def get_func_writing(config_writing):
+    if type(config_writing) is ConfigWritingTxt:
+        return func_writing_txt
+
+def get_func_processing(config_processing):
+    if type(config_processing) is ConfigProcessingChangeCase:
+        return func_processing_change_case
+    elif type(config_processing) is ConfigProcessingClean:
+        return func_processing_clean
+    elif type(config_processing) is ConfigProcessingRegexReplace:
+        return func_processing_regex_replace
+
+
+def func_reading_txt(config_reading, f_in, segment_start_end_list=None):
     for i_line, line in enumerate(f_in):
-        if i_line >= i_start:
-            if i_line < i_end:
-                yield (i_line, line)
-            else:
-                break
+        if segment_start_end_list:
+            if i_line >= segment_start_end_list[0]:
+                if i_line < segment_start_end_list[1]:
+                    yield (i_line, line)
+                else:
+                    break
+        else:
+            yield (i_line, line)
 
 
-def func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing, process_id, in_file):
-    for i_text, text in func_reading(config_reading):
-        percentage_current = percentage_segment_dict.get(i_text)
-        if percentage_current:
-            print(f"process_id: {process_id}: at {percentage_current}%")
-        text_processed = func_processing(text, config_processing)
-        yield text_processed
+def func_writing_txt(config_writing, text, f_out):
+    f_out.write(text)
 
 
-def func_shared_processing_simple(config_processing, config_reading, config_writing, process_id):
-    func_processing = get_func_processing(config_processing)
-    func_reading = get_func_reading(config_reading)
-    func_writing = get_func_writing(config_writing)
-    with open(config_reading.in_file_path, "r") as in_file, open(out_file_path, "w") as out_file:
-        for text_processed in func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing, in_file):
-            func_writing(text_processed, config_writing, out_file)
+# def func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing, process_id, in_file):
+#     for i_text, text in func_reading(config_reading):
+#         percentage_current = percentage_segment_dict.get(i_text)
+#         if percentage_current:
+#             print(f"process_id: {process_id}: at {percentage_current}%")
+#         text_processed = func_processing(text, config_processing)
+#         yield text_processed
+# 
+# 
+# def func_shared_processing_simple(config_processing, config_reading, config_writing, process_id):
+#     func_processing = get_func_processing(config_processing)
+#     func_reading = get_func_reading(config_reading)
+#     func_writing = get_func_writing(config_writing)
+#     with open(config_reading.in_file_path, "r") as in_file, open(out_file_path, "w") as out_file:
+#         for text_processed in func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing, in_file):
+#             func_writing(text_processed, config_writing, out_file)
 
 
-def func_processing_change_case(text, config_processing):
+def func_processing_change_case(config_processing, text):
     if config_processing.set_case == "upper":
         func_case = str.upper
     elif config_processing.set_case == "lower":
@@ -172,13 +218,13 @@ def func_processing_change_case(text, config_processing):
     return text_processed
 
 
-def func_processing_clean_individual(text, config_processing):
+def func_processing_clean(config_processing, text):
 
-    def func_processing_clean_clean(text):
-        return process_text(text, True)
-
-    def func_processing_clean_dirty(text):
-        return process_text(text, False)
+    # def func_processing_clean_clean(text):
+    #     return process_text(text, True)
+    # 
+    # def func_processing_clean_dirty(text):
+    #     return process_text(text, False)
 
     count_clean = 0
     count_dirty = 0
@@ -197,66 +243,29 @@ def func_processing_clean_individual(text, config_processing):
     return text_to_write
 
 
-def func_processing_clean(text, config_processing, config_reading, config_writing, process_id):
-    config_writing_clean = config_writing.config_writing_clean
-    config_writing_dirty = config_writing.config_writing_dirty
-    func_reading = get_func_reading(config_reading)
-    func_writing_clean = get_func_writing(config_writing_clean)
-    func_writing_dirty = get_func_writing(config_writing_dirty)
-    with (
-        open(config_reading.in_file_path, "r") as in_file, 
-        open(config_writing_clean.out_file_path, "w") as out_file_clean, 
-        open(config_writing_dirty.out_file_path, "w") as out_file_dirty,
-    ):
-        for text_processed in func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing):
-            func_writing_clean(text_processed_clean, config_writing_clean)
-            func_writing_dirty(text_processed_dirty, config_writing_dirty)
+def func_processing_regex_replace(config_processing, text):
+    pass
+
+# def func_processing_clean(text, config_processing, config_reading, config_writing, process_id):
+#     config_writing_clean = config_writing.config_writing_clean
+#     config_writing_dirty = config_writing.config_writing_dirty
+#     func_reading = get_func_reading(config_reading)
+#     func_writing_clean = get_func_writing(config_writing_clean)
+#     func_writing_dirty = get_func_writing(config_writing_dirty)
+#     with (
+#         open(config_reading.in_file_path, "r") as in_file, 
+#         open(config_writing_clean.out_file_path, "w") as out_file_clean, 
+#         open(config_writing_dirty.out_file_path, "w") as out_file_dirty,
+#     ):
+#         for text_processed in func_shared_processing_individual(func_reading, func_processing, config_reading, config_processing):
+#             func_writing_clean(text_processed_clean, config_writing_clean)
+#             func_writing_dirty(text_processed_dirty, config_writing_dirty)
 
 
-def func_writing_txt(text, f_out):
-    f_out.write(text)
-
-
-def count_lines(file_path):
-    result = subprocess.run(["wc", "-l", file_path], capture_output=True, text=True)
-    num_lines = int(result.stdout.split()[0])
-    return num_lines
-
-
-def create_segment_start_end_list_of_quantity(num_total, num_segments):
-    segment_start_end_list = []
-    step = num_total / num_segments
-    i_start = 0
-    for i_segment in range(1, num_segments + 1):
-        if i_segment < num_segments:
-            i_end = round(i_segment * step)
-            segment_start_end_list.append((i_start, i_end))
-            i_start = i_end
-        else:
-            segment_start_end_list.append((i_start, num_total))
-    return segment_start_end_list
-
-
-def create_segment_start_end_list_of_in_file(config_reading, num_segments):
-    segment_start_end_list = []
-    if type(config_reading) is ConfigReadingTxt:
-        print("counting lines of file.")
-        num_lines = count_lines(config_reading.in_file_path)
-        if num_lines == 0:
-            num_lines = 1
-        print(f"input file has {num_lines} lines")
-        segment_start_end_list = create_segment_start_end_list_of_quantity(num_lines, num_segments)
-    return segment_start_end_list
-
-
-def merge_tmp(out_file_path):
-    print("joining tmp files into one.")
-    with open(out_file_path, "w") as f_out:
-        tmp_file_path_list = sorted([TMP_FOLDER + "/" + f for f in os.listdir(TMP_FOLDER)])
-        for tmp_file_path in tmp_file_path_list:
-            with open(tmp_file_path, "r") as f_in:
-                for line in f_in:
-                    f_out.write(line)
+# def count_lines(file_path):
+#     result = subprocess.run(["wc", "-l", file_path], capture_output=True, text=True)
+#     num_lines = int(result.stdout.split()[0])
+#     return num_lines
 
 
 def write_veld_data_yaml(config_writing):
@@ -288,6 +297,42 @@ def write_veld_data_yaml(config_writing):
         yaml.dump(veld_data_yaml, f, sort_keys=False)
 
 
+def merge_tmp(out_file_path):
+    print("joining tmp files into one.")
+    with open(out_file_path, "w") as f_out:
+        tmp_file_path_list = sorted([TMP_FOLDER + "/" + f for f in os.listdir(TMP_FOLDER)])
+        for tmp_file_path in tmp_file_path_list:
+            with open(tmp_file_path, "r") as f_in:
+                for line in f_in:
+                    f_out.write(line)
+
+
+def create_segment_start_end_list_of_quantity(num_total, num_segments):
+    segment_start_end_list = []
+    step = num_total / num_segments
+    i_start = 0
+    for i_segment in range(1, num_segments + 1):
+        if i_segment < num_segments:
+            i_end = round(i_segment * step)
+            segment_start_end_list.append((i_start, i_end))
+            i_start = i_end
+        else:
+            segment_start_end_list.append((i_start, num_total))
+    return segment_start_end_list
+
+
+def create_segment_start_end_list_of_file(config_reading, num_segments):
+    print("- creating index segments of file -----------------------------------")
+    segment_start_end_list = []
+    with open(config_reading.in_file_path, "r") as f_in:
+        func_reading = get_func_reading(config_reading)
+        i_line = 0
+        for i_line, _ in func_reading(config_reading):
+            pass
+    num_lines = i_line + 1
+    segment_start_end_list = create_segment_start_end_list_of_quantity(num_lines, num_segments)
+    return segment_start_end_list
+
 
 def get_percentage_segment_dict(i_start, i_end):
     print_segments = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
@@ -297,51 +342,34 @@ def get_percentage_segment_dict(i_start, i_end):
         print_segments_dict[i_segment] = percentage
 
 
-def is_within_segment(i, start_end_segment):
-    return start_end_segment[0] <= i < start_end_segment[1]
-
-
-def is_at_or_above_start(i, i_start):
-    return i_start <= i
-
-
-def is_at_end(i, i_end):
-    return i == i_end - 1
-
-
-def print_progress(i, process_id, progress_segment_dict):
-    percentage = progress_segment_dict.get(i)
-    if percentage:
-        print(f"process_id: {process_id}: {percentage}%")
+def processing_execution(config_processing, config_reading, start_end_segment):
+    func_reading = get_func_reading(config_reading)
+    func_processing = get_func_processing(config_processing)
+    progress_segment_dict = get_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
+    for i_text, text in func_reading(config_reading, f_in, start_end_segment):
+        text_processed = func_processing(config_processing, text)
+        if percentage := progress_segment_dict.get(i)
+            print(f"process_id: {process_id}: {percentage}%")
+        yield text_processed
 
 
 def processing_context_common(config_processing, config_reading, config_writing, process_id, start_end_segment, progress_segment_dict):
-    func_writing = get_func_writing(config_writing)
     with open(config_reading.in_file_path, "r") as f_in, open(config_writing.out_file_path) as f_out:
-        for text in processing_execution():
+        func_writing = get_func_writing(config_writing)
+        for text in processing_execution(config_processing, config_reading, start_end_segment, progress_segment_dict):
             func_writing(config_writing, text_processed, f_out)
 
 
 def processing_context_clean(config_processing, config_reading, config_writing, process_id, start_end_segment, progress_segment_dict):
-    func_writing = get_func_writing(config_writing)
     with (
         open(config_reading.in_file_path, "r") as f_in, 
         open(config_writing.config_writing_clean.out_file_path) as f_out_clean
         open(config_writing.config_writing_dirty.out_file_path) as f_out_dirty
     ):
-        for text_processed_clean, text_processed_dirty in processing_execution():
+        func_writing = get_func_writing(config_writing)
+        for text_processed_clean, text_processed_dirty in processing_execution(config_processing, config_reading, start_end_segment, progress_segment_dict):
             func_writing(config_writing.config_writing_clean, text_processed_clean, f_out_clean)
             func_writing(config_writing.config_writing_dirty, text_processed_dirty, f_out_dirty)
-
-
-def processing_execution(config_processing, config_reading, config_writing, process_id, start_end_segment, progress_segment_dict):
-        for i_text, text in func_reading(config_reading, f_in):
-            if is_at_or_above_start(i_text, start_end_segment[0]):
-                if is_at_end(i_text, start_end_segment[1]):
-                    break
-                # processing
-                print_progress(i_text, process_id, progress_segment_dict)
-                yield text_processed
 
 
 # def main_process_single(
@@ -389,21 +417,21 @@ def processing_execution(config_processing, config_reading, config_writing, proc
 def main_process_multi(config_processing, config_reading, config_writing):
     DEBUG_SINGLE_PROCESS = True
     print("- all processing start ----------------------------------------------")
-    segment_start_end_list = create_segment_start_end_list_of_in_file(
+    segment_start_end_list = create_segment_start_end_list_of_file(
         config_reading, 
         config_processing.cpu_count
     )
 
     if type(config_processing) in [ConfigProcessingChangeCase]:
-        func_processing = func_processing_common
+        func_processing = processing_context_common
     elif type(config_processing) is ConfigProcessingClean:
-        func_processing = func_processing_clean
+        func_processing = processing_context_clean
 
     process_list = []
     for process_id, segment_start_end in enumerate(segment_start_end_list):
         if config_processing.cpu_count > 1:
             config_writing_per_process = copy.copy(config_writing)
-            config_writing_per_process.out_file_path = TMP_FOLDER + "tmp_" + str(process_id) + config_writing.file_type
+            config_writing_per_process.out_file_path = TMP_FOLDER + "tmp_" + str(process_id) + get_filetype_of_config(config_writing)
         else:
             config_writing_per_process = config_writing
         if DEBUG_SINGLE_PROCESS:
@@ -452,6 +480,7 @@ def main():
     config_processing = get_config_processing()
     config_reading = get_config_reading()
     config_writing = get_config_writing()
+    cofnig_writing_metadata = get_config_writing_metadata()
 
     # config adaptions and calling into main_process_multi
     if config_reading.in_file_path and config_writing.out_file_path:
