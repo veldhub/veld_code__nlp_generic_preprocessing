@@ -1,3 +1,4 @@
+import copy
 import os
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import yaml
 IN_FOLDER = "/veld/input/"
 OUT_FOLDER = "/veld/output/data/"
 OUT_METADATA_FOLDER = "/veld/output/metadata/"
+TMP_FOLDER = "/tmp/"
 
 
 @dataclass
@@ -134,7 +136,7 @@ def get_func_reading(config_reading):
     return func_reading
 
 
-def func_reading_txt(f_in, i_start, i_end):
+def func_reading_txt(config_reading, f_in):
     for i_line, line in enumerate(f_in):
         if i_line >= i_start:
             if i_line < i_end:
@@ -247,10 +249,10 @@ def create_segment_start_end_list_of_in_file(config_reading, num_segments):
     return segment_start_end_list
 
 
-def merge_tmp(tmp_folder, out_file_path):
+def merge_tmp(out_file_path):
     print("joining tmp files into one.")
     with open(out_file_path, "w") as f_out:
-        tmp_file_path_list = sorted([tmp_folder + "/" + f for f in os.listdir(tmp_folder)])
+        tmp_file_path_list = sorted([TMP_FOLDER + "/" + f for f in os.listdir(TMP_FOLDER)])
         for tmp_file_path in tmp_file_path_list:
             with open(tmp_file_path, "r") as f_in:
                 for line in f_in:
@@ -295,47 +297,93 @@ def get_percentage_segment_dict(i_start, i_end):
         print_segments_dict[i_segment] = percentage
 
 
-def main_process_single(
-    process_id, 
-    config_processing,
-    config_reading,
-    config_writing,
-    # tmp_folder,
-    # segment_start_end, 
-):
-    print(f"- process_id: {process_id}: start ----------------------------------------------")
+def is_within_segment(i, start_end_segment):
+    return start_end_segment[0] <= i < start_end_segment[1]
 
-    if type(config_processing) is ConfigProcessingChangeCase:
-        func_shared_processing_simple(config_processing, config_reading, config_writing)
-    elif type(config_processing) is ConfigProcessingClean:
-        func_processing_clean(config_processing, config_reading, config_writing)
 
-    # load matching functions
-    # if type(config_reading) is ConfigReadingTxt:
-    #     func_reading = func_reading_txt
-    # if type(config_processing) is ConfigProcessingChangeCase:
-    #     func_processing = func_processing_change_case
-    # elif type(config_processing) is ConfigProcessingClean:
-    #     func_processing = func_processing_clean
-    # if type(config_writing) is ConfigWritingTxt:
-    #     func_writing = func_writing_txt
-    # 
-    # # main single core processing
-    # i_start = segment_start_end[0]
-    # i_end = segment_start_end[1]
-    # percentage_segment_dict = get_percentage_segment_dict(i_start, i_end)
-    # if config_processing.cpu_count > 1:
-    #     if type(config_writing) is ConfigWritingTxt:
-    #         out_file_path = tmp_folder + str(process_id) + ".txt"
-    # else:
-    #     out_file_path = config_writing.out_file_path
-    # with open(config_reading.in_file_path, "r") as in_file, open(out_file_path, "w") as out_file:
-    #     for i_text, text in func_reading(in_file, i_start, i_end):
-    #         percentage_current = percentage_segment_dict.get(i_text)
-    #         if percentage_current:
-    #             print(f"process_id: {process_id}: at {percentage_current}%")
-    #         func_processing(text, config_processing, func_writing, out_file)
-    print(f"- process_id: {process_id}: done -----------------------------------------------")
+def is_at_or_above_start(i, i_start):
+    return i_start <= i
+
+
+def is_at_end(i, i_end):
+    return i == i_end - 1
+
+
+def print_progress(i, process_id, progress_segment_dict):
+    percentage = progress_segment_dict.get(i)
+    if percentage:
+        print(f"process_id: {process_id}: {percentage}%")
+
+
+def processing_context_common(config_processing, config_reading, config_writing, process_id, start_end_segment, progress_segment_dict):
+    func_writing = get_func_writing(config_writing)
+    with open(config_reading.in_file_path, "r") as f_in, open(config_writing.out_file_path) as f_out:
+        for text in processing_execution():
+            func_writing(config_writing, text_processed, f_out)
+
+
+def processing_context_clean(config_processing, config_reading, config_writing, process_id, start_end_segment, progress_segment_dict):
+    func_writing = get_func_writing(config_writing)
+    with (
+        open(config_reading.in_file_path, "r") as f_in, 
+        open(config_writing.config_writing_clean.out_file_path) as f_out_clean
+        open(config_writing.config_writing_dirty.out_file_path) as f_out_dirty
+    ):
+        for text_processed_clean, text_processed_dirty in processing_execution():
+            func_writing(config_writing.config_writing_clean, text_processed_clean, f_out_clean)
+            func_writing(config_writing.config_writing_dirty, text_processed_dirty, f_out_dirty)
+
+
+def processing_execution(config_processing, config_reading, config_writing, process_id, start_end_segment, progress_segment_dict):
+        for i_text, text in func_reading(config_reading, f_in):
+            if is_at_or_above_start(i_text, start_end_segment[0]):
+                if is_at_end(i_text, start_end_segment[1]):
+                    break
+                # processing
+                print_progress(i_text, process_id, progress_segment_dict)
+                yield text_processed
+
+
+# def main_process_single(
+#     process_id, 
+#     config_processing,
+#     config_reading,
+#     config_writing,
+#     segment_start_end, 
+# ):
+#     print(f"- process_id: {process_id}: start ----------------------------------------------")
+# 
+#     if type(config_processing) is ConfigProcessingChangeCase:
+#         func_processing_change_case(config_processing, config_reading, config_writing)
+#     elif type(config_processing) is ConfigProcessingClean:
+#         func_processing_clean(config_processing, config_reading, config_writing)
+# 
+#     # load matching functions
+#     # if type(config_reading) is ConfigReadingTxt:
+#     #     func_reading = func_reading_txt
+#     # if type(config_processing) is ConfigProcessingChangeCase:
+#     #     func_processing = func_processing_change_case
+#     # elif type(config_processing) is ConfigProcessingClean:
+#     #     func_processing = func_processing_clean
+#     # if type(config_writing) is ConfigWritingTxt:
+#     #     func_writing = func_writing_txt
+#     # 
+#     # # main single core processing
+#     # i_start = segment_start_end[0]
+#     # i_end = segment_start_end[1]
+#     # percentage_segment_dict = get_percentage_segment_dict(i_start, i_end)
+#     # if config_processing.cpu_count > 1:
+#     #     if type(config_writing) is ConfigWritingTxt:
+#     #         out_file_path = TMP_FOLDER + str(process_id) + ".txt"
+#     # else:
+#     #     out_file_path = config_writing.out_file_path
+#     # with open(config_reading.in_file_path, "r") as in_file, open(out_file_path, "w") as out_file:
+#     #     for i_text, text in func_reading(in_file, i_start, i_end):
+#     #         percentage_current = percentage_segment_dict.get(i_text)
+#     #         if percentage_current:
+#     #             print(f"process_id: {process_id}: at {percentage_current}%")
+#     #         func_processing(text, config_processing, func_writing, out_file)
+#     print(f"- process_id: {process_id}: done -----------------------------------------------")
 
 
 def main_process_multi(config_processing, config_reading, config_writing):
@@ -345,39 +393,46 @@ def main_process_multi(config_processing, config_reading, config_writing):
         config_reading, 
         config_processing.cpu_count
     )
+
+    if type(config_processing) in [ConfigProcessingChangeCase]:
+        func_processing = func_processing_common
+    elif type(config_processing) is ConfigProcessingClean:
+        func_processing = func_processing_clean
+
     process_list = []
-    tmp_folder = "/tmp/"
     for process_id, segment_start_end in enumerate(segment_start_end_list):
+        if config_processing.cpu_count > 1:
+            config_writing_per_process = copy.copy(config_writing)
+            config_writing_per_process.out_file_path = TMP_FOLDER + "tmp_" + str(process_id) + config_writing.file_type
+        else:
+            config_writing_per_process = config_writing
         if DEBUG_SINGLE_PROCESS:
-            main_process_single(
+            func_processing(
                 process_id, 
                 config_processing,
                 config_reading,
-                config_writing,
-                tmp_folder,
+                config_writing_per_process,
                 segment_start_end, 
             )
         else:
             process = Process(
-                target=main_process_single,
+                target=func_processing,
                 args=(
                     process_id, 
                     config_processing,
                     config_reading,
-                    config_writing,
-                    tmp_folder,
+                    config_writing_per_process,
                     segment_start_end, 
                 )
             )
             process.start()
             process_list.append(process)
-            sleep(config_processing.sleep_duration)
     if not DEBUG_SINGLE_PROCESS:
         for process in process_list:
             process.join()
     print("- all processing done -----------------------------------------------")
     if config_processing.cpu_count > 1:
-        merge_tmp(tmp_folder, config_writing.out_file_path)
+        merge_tmp(config_writing.out_file_path)
 
 
 def adapt_config_to_file_type(config_reading, config_writing):
