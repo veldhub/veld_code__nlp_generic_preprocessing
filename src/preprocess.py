@@ -19,8 +19,8 @@ TMP_FOLDER = "/tmp/"
 
 @dataclass
 class ConfigReading:
-    in_folder: str = None
-    in_file_path: str = None
+    folder: str = None
+    file_path: str = None
 
 
 @dataclass
@@ -30,8 +30,8 @@ class ConfigReadingTxt(ConfigReading):
 
 @dataclass
 class ConfigWriting:
-    out_folder: str = None
-    out_file_path: str = None
+    folder: str = None
+    file_path: str = None
 
 
 @dataclass
@@ -106,8 +106,8 @@ def concatenate_folder_and_file(folder, file):
 
 def get_config_reading():
     config_reading = ConfigReading(
-        in_folder=IN_FOLDER,
-        in_file_path=concatenate_folder_and_file(IN_FOLDER, get_env_var("in_file")),
+        folder=IN_FOLDER,
+        file_path=concatenate_folder_and_file(IN_FOLDER, get_env_var("in_file")),
     )
     return config_reading
 
@@ -117,18 +117,18 @@ def get_config_writing():
     if processing_func_name == "clean":
         config_writing = ConfigWritingClean(
             config_writing_clean=ConfigWriting(
-                out_folder=OUT_FOLDER,
-                out_file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_clean")),
+                folder=OUT_FOLDER,
+                file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_clean")),
             ),
             config_writing_dirty=ConfigWriting(
-                out_folder=OUT_FOLDER,
-                out_file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_dirty")),
+                folder=OUT_FOLDER,
+                file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_dirty")),
             ),
         )
     else:
         config_writing = ConfigWriting(
-            out_folder=OUT_FOLDER,
-            out_file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
+            folder=OUT_FOLDER,
+            file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
         )
     return config_writing
 
@@ -187,7 +187,7 @@ def get_filetype_of_config(config_reading_or_writing):
 
 
 def get_func_reading(config_reading):
-    if type(config_reading) is ConfigReadingTxt:
+    if type(config_reading) in [ConfigReadingTxt, ConfigWritingTxt]:
         return func_reading_txt
 
 
@@ -253,15 +253,15 @@ def func_processing_regex_replace(config_processing, text):
 
 def count_texts_of_output_individual(config_writing, file_name_pattern=None):
     num_lines = 0
-    if config_writing.out_file_path:
-        with open(config_writing.out_file_path, "r") as f:
+    if config_writing.file_path:
+        with open(config_writing.file_path, "r") as f:
             num_lines = count_texts_in_file(config_writing, f)
     else:
         num_lines = 0
-        for file in os.listdir(config_writing.out_folder):
-            config_writing.out_file_path = config_writing.out_folder + file
+        for file in os.listdir(config_writing.folder):
+            config_writing.file_path = config_writing.folder + file
             if not file_name_pattern or file_name_pattern in file:
-                with open(config_writing.out_file_path, "r") as f:
+                with open(config_writing.file_path, "r") as f:
                     num_lines += count_texts_in_file(config_writing, f)
     return num_lines
 
@@ -277,21 +277,19 @@ def count_texts_of_output_main(config_writing):
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
     if type(config_writing) is ConfigWritingClean:
-        out_folder = config_writing.config_writing_clean.out_folder
+        folder = config_writing.config_writing_clean.folder
     else:
-        out_folder = config_writing.out_folder
-    result = subprocess.run(["du", "-sh", out_folder], capture_output=True, text=True)
+        folder = config_writing.folder
+    result = subprocess.run(["du", "-sh", folder], capture_output=True, text=True)
     data_size = result.stdout.split()[0]
     num_lines = count_texts_of_output_main(config_writing)
-    # if type(config_writing) is ConfigWritingTxt:
-    #     file_type = "txt"
     veld_data_yaml = {
         "x-veld": {
             "data": {
-                "description": config_writing.out_metadata_description,
-                "topic": config_writing.out_metadata_topic,
-                "content": config_writing.out_metadata_content,
-                "file_type": file_type,
+                "description": config_writing_metadata.out_metadata_description,
+                "topic": config_writing_metadata.out_metadata_topic,
+                "content": config_writing_metadata.out_metadata_content,
+                "file_type": get_filetype_of_config(config_writing),
                 "additional": {
                     "data size": data_size,
                     "number of lines": num_lines,
@@ -299,12 +297,12 @@ def write_veld_data_yaml(config_writing_metadata, config_writing):
             }
         }
     }
-    with open(config_writing.out_metadata_file_path, "w") as f:
+    with open(config_writing_metadata.out_metadata_file_path, "w") as f:
         yaml.dump(veld_data_yaml, f, sort_keys=False)
 
 
 def merge_tmp_individual(config_writing, file_name_pattern):
-    with open(config_writing.out_file_path, "w") as f_out:
+    with open(config_writing.file_path, "w") as f_out:
         tmp_file_path_list = sorted([TMP_FOLDER + "/" + f for f in os.listdir(TMP_FOLDER)])
         for tmp_file_path in tmp_file_path_list:
             if not file_name_pattern or file_name_pattern in tmp_file_path:
@@ -336,12 +334,12 @@ def create_segment_start_end_list_of_quantity(num_total, num_segments):
     return segment_start_end_list
 
 
-def count_texts_in_file(config_reading, f_in):
-    func_reading = get_func_reading(config_reading)
-    with open(config_reading.in_file_path, "r") as f_in:
-        func_reading = get_func_reading(config_reading)
+def count_texts_in_file(config, f_in):
+    func_reading = get_func_reading(config)
+    with open(config.file_path, "r") as f_in:
+        func_reading = get_func_reading(config)
         i_line = 0
-        for i_line, _ in func_reading(config_reading, f_in):
+        for i_line, _ in func_reading(config, f_in):
             pass
     num_lines = i_line + 1
     return num_lines
@@ -350,7 +348,7 @@ def count_texts_in_file(config_reading, f_in):
 def create_segment_start_end_list_of_file(config_reading, num_segments):
     print("- creating index segments of file -----------------------------------")
     segment_start_end_list = []
-    with open(config_reading.in_file_path, "r") as f_in:
+    with open(config_reading.file_path, "r") as f_in:
         num_lines = count_texts_in_file(config_reading, f_in)
     segment_start_end_list = create_segment_start_end_list_of_quantity(num_lines, num_segments)
     return segment_start_end_list
@@ -371,14 +369,14 @@ def adapt_config_to_tmp(config_writing, config_processing, process_id):
         if type(config_writing_per_process) is ConfigWritingClean:
             config_writing_per_process.config_writing_clean = copy.copy(config_writing.config_writing_clean)
             config_writing_per_process.config_writing_dirty = copy.copy(config_writing.config_writing_dirty)
-            config_writing_per_process.config_writing_clean.out_file_path = (
+            config_writing_per_process.config_writing_clean.file_path = (
                 TMP_FOLDER 
                 + "tmp_clean_"
                 + str(process_id) 
                 + "." 
                 + get_filetype_of_config(config_writing.config_writing_clean)
             )
-            config_writing_per_process.config_writing_dirty.out_file_path = (
+            config_writing_per_process.config_writing_dirty.file_path = (
                 TMP_FOLDER 
                 + "tmp_dirty_" 
                 + str(process_id) 
@@ -386,7 +384,7 @@ def adapt_config_to_tmp(config_writing, config_processing, process_id):
                 + get_filetype_of_config(config_writing.config_writing_dirty)
             )
         else:
-            config_writing_per_process.out_file_path = (
+            config_writing_per_process.file_path = (
                 TMP_FOLDER 
                 + "tmp_" 
                 + str(process_id)
@@ -404,11 +402,11 @@ def adapt_config_to_file_type(config_reading_or_writing):
         config_reading_or_writing.config_writing_dirty = adapt_config_to_file_type(config_reading_or_writing.config_writing_dirty)
     else:
         try:
-            file_path = config_reading_or_writing.in_file_path
+            file_path = config_reading_or_writing.file_path
         except:
             pass
         try:
-            file_path = config_reading_or_writing.out_file_path
+            file_path = config_reading_or_writing.file_path
         except:
             pass
         file_type = file_path.split(".")[-1]
@@ -432,7 +430,7 @@ def processing_execution(config_processing, config_reading, process_id, start_en
 
 
 def processing_context_common(config_processing, config_reading, config_writing, process_id, start_end_segment):
-    with open(config_reading.in_file_path, "r") as f_in, open(config_writing.out_file_path) as f_out:
+    with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path) as f_out:
         func_writing = get_func_writing(config_writing)
         for text_processed in processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
             func_writing(config_writing, text_processed, f_out)
@@ -440,9 +438,9 @@ def processing_context_common(config_processing, config_reading, config_writing,
 
 def processing_context_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
     with (
-        open(config_reading.in_file_path, "r") as f_in, 
-        open(config_writing.config_writing_clean.out_file_path, "w") as f_out_clean,
-        open(config_writing.config_writing_dirty.out_file_path, "w") as f_out_dirty,
+        open(config_reading.file_path, "r") as f_in, 
+        open(config_writing.config_writing_clean.file_path, "w") as f_out_clean,
+        open(config_writing.config_writing_dirty.file_path, "w") as f_out_dirty,
     ):
         func_writing_clean = get_func_writing(config_writing.config_writing_clean)
         func_writing_dirty = get_func_writing(config_writing.config_writing_dirty)
@@ -508,31 +506,31 @@ def main():
     config_writing_metadata = get_config_writing_metadata()
 
     # config adaptions and calling into main_process_multi
-    if config_reading.in_file_path:
+    if config_reading.file_path:
         config_reading = adapt_config_to_file_type(config_reading)
         config_writing = adapt_config_to_file_type(config_writing)
         main_process_multi(config_processing, config_reading, config_writing)
     else:
-        for file in os.listdir(config_reading.in_folder):
-            config_reading.in_file_path = config_reading.in_folder + file
+        for file in os.listdir(config_reading.folder):
+            config_reading.file_path = config_reading.folder + file
             if type(config_writing) is ConfigWritingClean:
                 file_split = file.split(".")
                 file_name = "".join(file_split[:-1])
                 file_type = file_split[-1]
-                config_writing.config_writing_clean.out_file_path = (
-                    config_writing.out_folder
+                config_writing.config_writing_clean.file_path = (
+                    config_writing.folder
                     + file_name
                     + "_clean."
                     + file_type
                 )
-                config_writing.config_writing_dirty.out_file_path = (
-                    config_writing.out_folder
+                config_writing.config_writing_dirty.file_path = (
+                    config_writing.folder
                     + file_name
                     + "_dirty."
                     + file_type
                 )
             else:
-                config_writing.out_file_path = config_writing.out_folder + file
+                config_writing.file_path = config_writing.folder + file
             config_reading = adapt_config_to_file_type(config_reading)
             config_writing = adapt_config_to_file_type(config_writing)
             main_process_multi(config_processing, config_reading, config_writing)

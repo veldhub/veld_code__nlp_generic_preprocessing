@@ -35,5 +35,4 @@ services:
       out_data_description: null
       set_case: null
       cpu_count: 1
-      sleep_duration: 0
 

@@ -43,12 +43,6 @@ x-veld:
           that processing could continue should it have crashed"
         var_type: "int"
         default: 100
-      - environment_var: sleep_duration
-        description: "number of seceonds between each multiprocess invokation, since with big data,
-          a memory race condition can occurr. To work-around this, a small waiting period in between
-          can be set with this variable."
-        var_type: "int"
-        default: 10
 
 services:
   veld_preprocess_clean:
@@ -66,5 +60,4 @@ services:
       out_metadata_content: "training data,demo data"
       min_char_percentage: null
       cpu_count: 1
-      sleep_duration: 0
 
