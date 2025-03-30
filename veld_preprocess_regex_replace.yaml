@@ -1,0 +1,38 @@
+x-veld:
+  code:
+    description: "makes entire text lowercase"
+    topic: 
+      - "NLP"
+      - "Preprocessing"
+      - "ETL"
+
+    input:
+      - volume: /veld/input/
+        environment_var: in_txt_file
+        file_type: "txt"
+        content: "raw text"
+
+    output:
+      - volume: /veld/output/data/
+        environment_var: out_txt_file 
+        file_type: "txt"
+        content: "raw text"
+
+    config:
+      - environment_var: out_data_description
+        description: "automatic data description for generating a data veld yaml file"
+        var_type: "str" 
+
+services:
+  veld_preprocess_regex_replace:
+    build: .
+    volumes:
+      - ./src/:/veld/code/:z
+    command: python -u /veld/code/preprocess.py regex_replace
+    environment:
+      in_file: null
+      out_file: null
+      out_data_description: null
+      set_case: null
+      cpu_count: 1
+

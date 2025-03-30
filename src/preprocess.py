@@ -66,7 +66,8 @@ class ConfigProcessingChangeCase(ConfigProcessing):
 
 @dataclass
 class ConfigProcessingRegexReplace(ConfigProcessing):
-    regex_sub: Tuple[str, str] = None
+    regex_pattern_match: str = None
+    regex_pattern_replacement: str = None
 
 
 @dataclass
@@ -74,10 +75,12 @@ class ConfigProcessingClean(ConfigProcessing):
     min_clean_char_percentage: float = None
 
 
-def get_env_var(var_name, cast_func=None):
+def get_env_var(var_name, cast_func=None, mandatory=False):
     var_content = os.getenv(var_name)
-    if var_content:
-        print(f"{var_name}: {var_content}")
+    if var_content is not None:
+        print(f"{var_name}: {var_content.__repr__()}")
+    elif mandatory:
+        raise Exception(f"environment variable: '{var_name}' is mandatory")
     if cast_func:
         try:
             var_content = cast_func(var_content)
@@ -165,15 +168,18 @@ def get_config_processing():
     elif processing_func_name == "remove_punctuation":
         config_processing = ConfigProcessingRegexReplace(
             **asdict(config_processing),
-            regex_sub=(r"[^\w\s]", "")
+            # regex_sub=(r"[^\w\s]", "")
+            regex_pattern_match=r"[^\w\s]",
+            regex_pattern_replacement="",
         )
-    # TODO: create veld service for regex_replace
     elif processing_func_name == "regex_replace": 
-        regex_pattern_match = get_env_var("regex_pattern_match")
-        regex_pattern_replacement = get_env_var("regex_pattern_replacement")
+        regex_pattern_match = get_env_var("regex_pattern_match", mandatory=True)
+        regex_pattern_replacement = get_env_var("regex_pattern_replacement", mandatory=True)
         config_processing = ConfigProcessingRegexReplace(
             **asdict(config_processing),
-            regex_sub=(regex_pattern_match, regex_pattern_replacement),
+            # regex_sub=(regex_pattern_match, regex_pattern_replacement),
+            regex_pattern_match=regex_pattern_match,
+            regex_pattern_replacement=regex_pattern_replacement,
         )
     elif processing_func_name == "clean":
         config_processing = ConfigProcessingClean(
@@ -200,6 +206,13 @@ def get_func_processing(config_processing):
         return func_processing_clean
     elif type(config_processing) is ConfigProcessingRegexReplace:
         return func_processing_regex_replace
+
+
+def get_func_context_processing(config_processing):
+    if type(config_processing) in [ConfigProcessingChangeCase, ConfigProcessingRegexReplace]:
+        return processing_context_common
+    elif type(config_processing) is ConfigProcessingClean:
+        return processing_context_clean
 
 
 def get_filetype_of_config(config_reading_or_writing):
@@ -249,7 +262,7 @@ def func_processing_clean(config_processing, text):
 
 
 def func_processing_regex_replace(config_processing, text):
-    text_processed = re.sub(config_processing.regex_sub)
+    text_processed = re.sub(config_processing.regex_pattern_match, config_processing.regex_pattern_replacement, text)
     return text_processed
 
 
@@ -285,12 +298,24 @@ def write_veld_data_yaml(config_writing_metadata, config_writing):
 
 def merge_tmp_individual(config_writing, file_name_pattern=None):
     with open(config_writing.file_path, "w") as f_out:
-        tmp_file_path_list = sorted([TMP_FOLDER + "/" + f for f in os.listdir(TMP_FOLDER)])
-        for tmp_file_path in tmp_file_path_list:
+        tmp_file_path_list = []
+        for file in os.listdir(TMP_FOLDER):
+            file_name = file.split(".")[0]
+            number = ""
+            for char in file_name[::-1]:
+                try:
+                    int(char)
+                except:
+                    break
+                else:
+                    number += char
+            number = int(number[::-1])
+            tmp_file_path_list.append((number, TMP_FOLDER + file))
+        tmp_file_path_list = sorted(tmp_file_path_list, key=lambda x: x[0])
+        for _, tmp_file_path in tmp_file_path_list:
             if not file_name_pattern or file_name_pattern in tmp_file_path:
                 with open(tmp_file_path, "r") as f_in:
-                    for line in f_in:
-                        f_out.write(line)
+                    f_out.write(f_in.read())
 
 
 def merge_tmp_main(config_writing):
@@ -462,23 +487,18 @@ def processing_context_clean(config_processing, config_reading, config_writing, 
 
 
 def main_process_multi(config_processing, config_reading, config_writing):
-    DEBUG_SINGLE_PROCESS = True
+    DEBUG_SINGLE_PROCESS = False
     print("- all processing start ----------------------------------------------")
     segment_start_end_list = create_segment_start_end_list_of_file(
         config_reading, 
         config_processing.cpu_count
     )
-
-    if type(config_processing) in [ConfigProcessingChangeCase]:
-        func_processing = processing_context_common
-    elif type(config_processing) is ConfigProcessingClean:
-        func_processing = processing_context_clean
-
+    func_context_processing = get_func_context_processing(config_processing)
     process_list = []
     for process_id, segment_start_end in enumerate(segment_start_end_list):
         config_writing_per_process = adapt_config_to_tmp(config_writing, config_processing, process_id)
         if DEBUG_SINGLE_PROCESS:
-            func_processing(
+            func_context_processing(
                 config_processing,
                 config_reading,
                 config_writing_per_process,
@@ -487,7 +507,7 @@ def main_process_multi(config_processing, config_reading, config_writing):
             )
         else:
             process = Process(
-                target=func_processing,
+                target=func_context_processing,
                 args=(
                     config_processing,
                     config_reading,
