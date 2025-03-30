@@ -125,6 +125,8 @@ def get_config_writing():
                 file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_dirty")),
             ),
         )
+        if not config_writing.config_writing_dirty.file_path:
+            config_writing.config_writing_dirty.file_path = "/tmp/tmp_dirty" 
     else:
         config_writing = ConfigWriting(
             folder=OUT_FOLDER,
@@ -253,10 +255,14 @@ def func_processing_regex_replace(config_processing, text):
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
     if type(config_writing) is ConfigWritingClean:
-        folder = config_writing.config_writing_clean.folder
+        folder_or_file = config_writing.config_writing_clean.file_path
+        if not folder_or_file:
+            folder_or_file = config_writing.config_writing_clean.folder
     else:
-        folder = config_writing.folder
-    result = subprocess.run(["du", "-sh", folder], capture_output=True, text=True)
+        folder_or_file = config_writing.folder
+        if not folder_or_file:
+            config_writing.folder
+    result = subprocess.run(["du", "-sh", folder_or_file], capture_output=True, text=True)
     data_size = result.stdout.split()[0]
     num_lines = count_texts_of_output_main(config_writing)
     veld_data_yaml = {
@@ -277,7 +283,7 @@ def write_veld_data_yaml(config_writing_metadata, config_writing):
         yaml.dump(veld_data_yaml, f, sort_keys=False)
 
 
-def merge_tmp_individual(config_writing, file_name_pattern):
+def merge_tmp_individual(config_writing, file_name_pattern=None):
     with open(config_writing.file_path, "w") as f_out:
         tmp_file_path_list = sorted([TMP_FOLDER + "/" + f for f in os.listdir(TMP_FOLDER)])
         for tmp_file_path in tmp_file_path_list:
@@ -369,28 +375,15 @@ def adapt_config_to_tmp(config_writing, config_processing, process_id):
         if type(config_writing_per_process) is ConfigWritingClean:
             config_writing_per_process.config_writing_clean = copy.copy(config_writing.config_writing_clean)
             config_writing_per_process.config_writing_dirty = copy.copy(config_writing.config_writing_dirty)
-            config_writing_per_process.config_writing_clean.file_path = (
-                TMP_FOLDER 
-                + "tmp_clean_"
-                + str(process_id) 
-                + "." 
-                + get_filetype_of_config(config_writing.config_writing_clean)
-            )
-            config_writing_per_process.config_writing_dirty.file_path = (
-                TMP_FOLDER 
-                + "tmp_dirty_" 
-                + str(process_id) 
-                + "." 
-                + get_filetype_of_config(config_writing.config_writing_dirty)
-            )
+            config_writing_per_process.config_writing_clean.file_path = (TMP_FOLDER + "tmp_clean_"
+                + str(process_id) + "." 
+                + get_filetype_of_config(config_writing.config_writing_clean))
+            config_writing_per_process.config_writing_dirty.file_path = (TMP_FOLDER + "tmp_dirty_" 
+                + str(process_id) + "." 
+                + get_filetype_of_config(config_writing.config_writing_dirty))
         else:
-            config_writing_per_process.file_path = (
-                TMP_FOLDER 
-                + "tmp_" 
-                + str(process_id)
-                + "." 
-                + get_filetype_of_config(config_writing)
-            )
+            config_writing_per_process.file_path = (TMP_FOLDER + "tmp_" + str(process_id)
+                + "." + get_filetype_of_config(config_writing))
     else:
         config_writing_per_process = config_writing
     return config_writing_per_process
@@ -418,6 +411,22 @@ def adapt_config_to_file_type(config_reading_or_writing):
     return config_reading_or_writing
 
 
+def check_if_file_paths(config_reading, config_writing):
+    if config_reading.file_path:
+        if type(config_writing) is ConfigWritingClean:
+            if config_writing.config_writing_clean.file_path:
+                return  True
+            else:
+                return False
+        else:
+            if config_writing.file_path:
+                return True
+            else:
+                return False
+    else:
+        return False
+
+
 def processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
@@ -430,13 +439,14 @@ def processing_execution(config_processing, config_reading, process_id, start_en
 
 
 def processing_context_common(config_processing, config_reading, config_writing, process_id, start_end_segment):
-    with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path) as f_out:
+    with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
         func_writing = get_func_writing(config_writing)
         for text_processed in processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
             func_writing(config_writing, text_processed, f_out)
 
 
 def processing_context_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
+    print(config_reading)
     with (
         open(config_reading.file_path, "r") as f_in, 
         open(config_writing.config_writing_clean.file_path, "w") as f_out_clean,
@@ -479,10 +489,10 @@ def main_process_multi(config_processing, config_reading, config_writing):
             process = Process(
                 target=func_processing,
                 args=(
-                    process_id, 
                     config_processing,
                     config_reading,
                     config_writing_per_process,
+                    process_id, 
                     segment_start_end, 
                 )
             )
@@ -500,13 +510,13 @@ def main():
 
     # config reading
     print("- preparing --------------------------------------------------------")
-    config_processing = get_config_processing()
     config_reading = get_config_reading()
     config_writing = get_config_writing()
     config_writing_metadata = get_config_writing_metadata()
+    config_processing = get_config_processing()
 
     # config adaptions and calling into main_process_multi
-    if config_reading.file_path:
+    if check_if_file_paths(config_reading, config_writing):
         config_reading = adapt_config_to_file_type(config_reading)
         config_writing = adapt_config_to_file_type(config_writing)
         main_process_multi(config_processing, config_reading, config_writing)
@@ -517,23 +527,19 @@ def main():
                 file_split = file.split(".")
                 file_name = "".join(file_split[:-1])
                 file_type = file_split[-1]
-                config_writing.config_writing_clean.file_path = (
-                    config_writing.folder
-                    + file_name
-                    + "_clean."
-                    + file_type
-                )
-                config_writing.config_writing_dirty.file_path = (
-                    config_writing.folder
-                    + file_name
-                    + "_dirty."
-                    + file_type
-                )
+                config_writing.config_writing_clean.file_path = (config_writing.folder + file_name
+                    + "_clean." + file_type)
+                config_writing.config_writing_dirty.file_path = (config_writing.folder + file_name
+                    + "_dirty." + file_type)
             else:
                 config_writing.file_path = config_writing.folder + file
             config_reading = adapt_config_to_file_type(config_reading)
             config_writing = adapt_config_to_file_type(config_writing)
             main_process_multi(config_processing, config_reading, config_writing)
+            config_reading.file_path = None
+            if type(config_writing) is ConfigWritingClean:
+                config_writing.config_writing_clean.file_path = None
+                config_writing.config_writing_dirty.file_path = None
 
     # write metadata
     if config_writing_metadata.out_metadata_file_path:
