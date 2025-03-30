@@ -8,7 +8,9 @@ from dataclasses import dataclass, asdict
 from multiprocessing import Process
 from typing import Tuple
 
+import nltk
 import yaml
+from nltk.tokenize import sent_tokenize
 
 
 IN_FOLDER = "/veld/input/"
@@ -75,6 +77,11 @@ class ConfigProcessingClean(ConfigProcessing):
     min_clean_char_percentage: float = None
 
 
+@dataclass
+class ConfigProcessingSplitSentences(ConfigProcessing):
+    pass
+
+
 def get_env_var(var_name, cast_func=None, mandatory=False):
     var_content = os.getenv(var_name)
     if var_content is not None:
@@ -91,8 +98,11 @@ def get_env_var(var_name, cast_func=None, mandatory=False):
 
 def get_env_var_to_list(var_name):
     var_content = get_env_var(var_name)
-    var_content_list = var_content.split(",")
-    return var_content_list
+    if var_content:
+        var_content_list = var_content.split(",")
+        return var_content_list
+    else:
+        return None
 
 
 def concatenate_folder_and_file(folder, file):
@@ -206,6 +216,8 @@ def get_func_processing(config_processing):
         return func_processing_clean
     elif type(config_processing) is ConfigProcessingRegexReplace:
         return func_processing_regex_replace
+    elif type(config_processing) is ConfigProcessingSplitSentences:
+        return func_processing_split_sentences
 
 
 def get_func_context_processing(config_processing):
@@ -242,7 +254,7 @@ def func_processing_change_case(config_processing, text):
     elif config_processing.set_case == "lower":
         func_case = str.lower
     text_processed = func_case(text)
-    return text_processed
+    yield text_processed
 
 
 def func_processing_clean(config_processing, text):
@@ -256,14 +268,20 @@ def func_processing_clean(config_processing, text):
             count_dirty += 1
     percentage_clean_char = (100 * count_clean)  / (count_clean + count_dirty)
     if percentage_clean_char >= config_processing.min_clean_char_percentage:
-        return (text, True)
+        yield (text, True)
     else:
-        return (text, False)
+        yield (text, False)
 
 
 def func_processing_regex_replace(config_processing, text):
     text_processed = re.sub(config_processing.regex_pattern_match, config_processing.regex_pattern_replacement, text)
-    return text_processed
+    yield text_processed
+
+
+def func_processing_split_sentences(config_processing, text):
+    text_processed_list = sent_tokenize(text)
+    for text_processed in text_processed_list:
+        yield text_processed
 
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
@@ -457,10 +475,10 @@ def processing_execution(config_processing, config_reading, process_id, start_en
     func_processing = get_func_processing(config_processing)
     percentage_segment_dict = create_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
     for i_text, text in func_reading(config_reading, f_in, start_end_segment):
-        text_processed = func_processing(config_processing, text)
-        if percentage := percentage_segment_dict.get(i_text):
-            print(f"process_id: {process_id}: {percentage}%")
-        yield text_processed
+        for text_processed in func_processing(config_processing, text):
+            if percentage := percentage_segment_dict.get(i_text):
+                print(f"process_id: {process_id}: {percentage}%")
+            yield text_processed
 
 
 def processing_context_common(config_processing, config_reading, config_writing, process_id, start_end_segment):

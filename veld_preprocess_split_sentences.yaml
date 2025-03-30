@@ -1,0 +1,14 @@
+x-veld:
+  code:
+
+services:
+  veld_preprocess_split_sentences:
+    build: .
+    volumes:
+      - ./src/:/veld/code/:z
+    command: python -u /veld/code/preprocess.py split_sentences
+    environment:
+      in_file: null
+      out_file: null
+      cpu_count: 1
+  
