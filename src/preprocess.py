@@ -92,16 +92,16 @@ def get_env_var_to_list(var_name):
     return var_content_list
 
 
-def get_processing_func_name():
-    processing_func_name = sys.argv[1]
-    return processing_func_name
-
-
 def concatenate_folder_and_file(folder, file):
     if file:
         return folder + file
     else:
         return None
+
+
+def get_processing_func_name():
+    processing_func_name = sys.argv[1]
+    return processing_func_name
 
 
 def get_config_reading():
@@ -181,11 +181,6 @@ def get_config_processing():
     return config_processing
 
 
-def get_filetype_of_config(config_reading_or_writing):
-    if type(config_reading_or_writing) in [ConfigReadingTxt, ConfigWritingTxt]:
-        return "txt"
-
-
 def get_func_reading(config_reading):
     if type(config_reading) in [ConfigReadingTxt, ConfigWritingTxt]:
         return func_reading_txt
@@ -203,6 +198,11 @@ def get_func_processing(config_processing):
         return func_processing_clean
     elif type(config_processing) is ConfigProcessingRegexReplace:
         return func_processing_regex_replace
+
+
+def get_filetype_of_config(config_reading_or_writing):
+    if type(config_reading_or_writing) in [ConfigReadingTxt, ConfigWritingTxt]:
+        return "txt"
 
 
 def func_reading_txt(config_reading, f_in, segment_start_end_list=None):
@@ -234,8 +234,8 @@ def func_processing_clean(config_processing, text):
     count_clean = 0
     count_dirty = 0
     for char in text:
-        cat = unicodedata.category(char)
-        if cat.startswith("L") or cat.startswith("Z"):
+        category = unicodedata.category(char)
+        if category.startswith("L") or category.startswith("Z"):
             count_clean += 1
         else:
             count_dirty += 1
@@ -249,30 +249,6 @@ def func_processing_clean(config_processing, text):
 def func_processing_regex_replace(config_processing, text):
     text_processed = re.sub(config_processing.regex_sub)
     return text_processed
-
-
-def count_texts_of_output_individual(config_writing, file_name_pattern=None):
-    num_lines = 0
-    if config_writing.file_path:
-        with open(config_writing.file_path, "r") as f:
-            num_lines = count_texts_in_file(config_writing, f)
-    else:
-        num_lines = 0
-        for file in os.listdir(config_writing.folder):
-            config_writing.file_path = config_writing.folder + file
-            if not file_name_pattern or file_name_pattern in file:
-                with open(config_writing.file_path, "r") as f:
-                    num_lines += count_texts_in_file(config_writing, f)
-    return num_lines
-
-
-def count_texts_of_output_main(config_writing):
-    num_lines = 0
-    if type(config_writing) is ConfigWritingClean:
-        num_lines = count_texts_of_output_individual(config_writing.config_writing_clean, "_clean")
-    else:
-        num_lines = count_texts_of_output_individual(config_writing)
-    return num_lines
 
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
@@ -320,6 +296,41 @@ def merge_tmp_main(config_writing):
         merge_tmp_individual(config_writing)
 
 
+def count_texts_of_output_individual(config_writing, file_name_pattern=None):
+    num_lines = 0
+    if config_writing.file_path:
+        with open(config_writing.file_path, "r") as f:
+            num_lines = count_texts_in_file(config_writing, f)
+    else:
+        num_lines = 0
+        for file in os.listdir(config_writing.folder):
+            config_writing.file_path = config_writing.folder + file
+            if not file_name_pattern or file_name_pattern in file:
+                with open(config_writing.file_path, "r") as f:
+                    num_lines += count_texts_in_file(config_writing, f)
+    return num_lines
+
+
+def count_texts_of_output_main(config_writing):
+    num_lines = 0
+    if type(config_writing) is ConfigWritingClean:
+        num_lines = count_texts_of_output_individual(config_writing.config_writing_clean, "_clean")
+    else:
+        num_lines = count_texts_of_output_individual(config_writing)
+    return num_lines
+
+
+def count_texts_in_file(config, f_in):
+    func_reading = get_func_reading(config)
+    with open(config.file_path, "r") as f_in:
+        func_reading = get_func_reading(config)
+        i_line = 0
+        for i_line, _ in func_reading(config, f_in):
+            pass
+    num_lines = i_line + 1
+    return num_lines
+
+
 def create_segment_start_end_list_of_quantity(num_total, num_segments):
     segment_start_end_list = []
     step = num_total / num_segments
@@ -334,17 +345,6 @@ def create_segment_start_end_list_of_quantity(num_total, num_segments):
     return segment_start_end_list
 
 
-def count_texts_in_file(config, f_in):
-    func_reading = get_func_reading(config)
-    with open(config.file_path, "r") as f_in:
-        func_reading = get_func_reading(config)
-        i_line = 0
-        for i_line, _ in func_reading(config, f_in):
-            pass
-    num_lines = i_line + 1
-    return num_lines
-
-
 def create_segment_start_end_list_of_file(config_reading, num_segments):
     print("- creating index segments of file -----------------------------------")
     segment_start_end_list = []
@@ -354,7 +354,7 @@ def create_segment_start_end_list_of_file(config_reading, num_segments):
     return segment_start_end_list
 
 
-def get_percentage_segment_dict(i_start, i_end):
+def create_percentage_segment_dict(i_start, i_end):
     percentage_segmens = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
     percentage_segmens = [e + i_start - 1 for s,e in percentage_segmens]
     percentage_segment_dict = {}
@@ -421,7 +421,7 @@ def adapt_config_to_file_type(config_reading_or_writing):
 def processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
-    percentage_segment_dict = get_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
+    percentage_segment_dict = create_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
     for i_text, text in func_reading(config_reading, f_in, start_end_segment):
         text_processed = func_processing(config_processing, text)
         if percentage := percentage_segment_dict.get(i_text):
