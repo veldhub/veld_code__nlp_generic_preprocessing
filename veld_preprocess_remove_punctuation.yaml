@@ -47,12 +47,10 @@ services:
     build: .
     volumes:
       - ./src/:/veld/code/:z
-    command: python3 -u /veld/code/preprocess_remove_punctuation.py
+    command: python -u /veld/code/preprocess.py remove_punctuation
     environment:
-      in_txt_file: null
-      out_txt_file: null
-      cpu_count: null
-      buffer_segments: 100
+      in_file: null
+      out_file: null
       out_data_description: null
-      sleep_duration: 10
+      cpu_count: 1
 

@@ -204,7 +204,6 @@ def get_config_processing():
     elif processing_func_name == "remove_punctuation":
         config_processing = ConfigProcessingRegexReplace(
             **asdict(config_processing),
-            # regex_sub=(r"[^\w\s]", "")
             regex_pattern_match=r"[^\w\s]",
             regex_pattern_replacement="",
         )
@@ -546,7 +545,6 @@ def processing_context_common(config_processing, config_reading, config_writing,
 
 
 def processing_context_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
-    print(config_reading)
     with (
         open(config_reading.file_path, "r") as f_in, 
         open(config_writing.config_writing_clean.file_path, "w") as f_out_clean,
@@ -617,17 +615,21 @@ def main():
         main_process_multi(config_processing, config_reading, config_writing)
     else:
         for file in os.listdir(config_reading.folder):
-            if file not in config_reading.ignore_file:
+            if config_reading.ignore_file and  file not in config_reading.ignore_file:
+                continue
+            else:
                 print(f"processing file: {file}")
                 config_reading.file_path = config_reading.folder + file
                 if type(config_writing) is ConfigWritingClean:
                     file_split = file.split(".")
                     file_name = "".join(file_split[:-1])
                     file_type = file_split[-1]
-                    config_writing.config_writing_clean.file_path = (config_writing.folder + file_name
-                        + "_clean." + file_type)
-                    config_writing.config_writing_dirty.file_path = (config_writing.folder + file_name
-                        + "_dirty." + file_type)
+                    config_writing.config_writing_clean.file_path = (
+                        config_writing.config_writing_clean.folder + file_name + "_clean." 
+                        + file_type)
+                    config_writing.config_writing_dirty.file_path = (
+                        config_writing.config_writing_dirty.folder + file_name + "_dirty." 
+                        + file_type)
                 else:
                     config_writing.file_path = config_writing.folder + file
                 config_reading = adapt_config_to_file_type(config_reading)
