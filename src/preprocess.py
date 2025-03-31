@@ -6,9 +6,8 @@ import sys
 import unicodedata
 from dataclasses import dataclass, asdict
 from multiprocessing import Process
-from typing import Tuple
+from typing import List
 
-import nltk
 import yaml
 from nltk.tokenize import sent_tokenize
 
@@ -23,11 +22,12 @@ TMP_FOLDER = "/tmp/"
 class ConfigReading:
     folder: str = None
     file_path: str = None
+    ignore_file: List[str] = None
 
 
 @dataclass
 class ConfigReadingTxt(ConfigReading):
-    pass
+    txt_has_lines: bool = None
 
 
 @dataclass
@@ -38,7 +38,7 @@ class ConfigWriting:
 
 @dataclass
 class ConfigWritingTxt(ConfigWriting):
-    pass
+    set_delimit_by_newline: bool = False
 
 
 @dataclass
@@ -79,7 +79,7 @@ class ConfigProcessingClean(ConfigProcessing):
 
 @dataclass
 class ConfigProcessingSplitSentences(ConfigProcessing):
-    pass
+    language: str = None
 
 
 def get_env_var(var_name, cast_func=None, mandatory=False):
@@ -105,6 +105,19 @@ def get_env_var_to_list(var_name):
         return None
 
 
+def get_env_var_to_bool(var_name):
+    var_content = get_env_var(var_name)
+    if var_content:
+        if var_content.lower() == "true":
+            return True
+        elif var_content.lower() == "false":
+            return False
+        else:
+            raise Exception(f"Wrong value for a boolean variable: {var_content}")
+    else:
+        return None
+
+
 def concatenate_folder_and_file(folder, file):
     if file:
         return folder + file
@@ -121,7 +134,14 @@ def get_config_reading():
     config_reading = ConfigReading(
         folder=IN_FOLDER,
         file_path=concatenate_folder_and_file(IN_FOLDER, get_env_var("in_file")),
+        ignore_file=get_env_var_to_list("ignore_file"),
     )
+    txt_has_lines = get_env_var_to_bool("txt_has_lines")
+    if txt_has_lines is not None:
+        config_reading = ConfigReadingTxt(
+            **asdict(config_reading),
+            txt_has_lines=txt_has_lines,
+        )
     return config_reading
 
 
@@ -140,6 +160,12 @@ def get_config_writing():
         )
         if not config_writing.config_writing_dirty.file_path:
             config_writing.config_writing_dirty.file_path = "/tmp/tmp_dirty" 
+    elif processing_func_name == "split_sentences":
+        config_writing = ConfigWritingTxt(
+            folder=OUT_FOLDER,
+            file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
+            set_delimit_by_newline=True,
+        )
     else:
         config_writing = ConfigWriting(
             folder=OUT_FOLDER,
@@ -152,16 +178,16 @@ def get_config_writing_metadata():
     out_metadata_file = get_env_var("out_metadata_file")
     if out_metadata_file:
         out_metadata_file_path = OUT_METADATA_FOLDER + out_metadata_file
+        config_writing_metadata = ConfigWritingMetadata(
+            out_metadata_folder=OUT_METADATA_FOLDER,
+            out_metadata_file_path=out_metadata_file_path,
+            out_metadata_description=get_env_var("out_metadata_description"),
+            out_metadata_topic=get_env_var_to_list("out_metadata_topic"),
+            out_metadata_content=get_env_var_to_list("out_metadata_content"),
+        )
+        return config_writing_metadata
     else:
-        out_metadata_file = None
-    config_writing_metadata = ConfigWritingMetadata(
-        out_metadata_folder=OUT_METADATA_FOLDER,
-        out_metadata_file_path=out_metadata_file_path,
-        out_metadata_description=get_env_var("out_metadata_description"),
-        out_metadata_topic=get_env_var_to_list("out_metadata_topic"),
-        out_metadata_content=get_env_var_to_list("out_metadata_content"),
-    )
-    return config_writing_metadata
+        return None
 
 
 def get_config_processing():
@@ -196,17 +222,28 @@ def get_config_processing():
             **asdict(config_processing),
             min_clean_char_percentage=get_env_var("min_clean_char_percentage", float),
         )
+    elif processing_func_name == "split_sentences":
+        config_processing = ConfigProcessingSplitSentences(
+            **asdict(config_processing),
+            language=get_env_var("language", mandatory=True),
+        )
+    else:
+        raise Exception("could not determine config_processing")
     return config_processing
 
 
 def get_func_reading(config_reading):
     if type(config_reading) in [ConfigReadingTxt, ConfigWritingTxt]:
         return func_reading_txt
+    else:
+        raise Exception(f"no registered function for {config_reading}")
 
 
 def get_func_writing(config_writing):
     if type(config_writing) is ConfigWritingTxt:
         return func_writing_txt
+    else:
+        raise Exception(f"no registered function for {config_writing}")
 
 
 def get_func_processing(config_processing):
@@ -218,13 +255,19 @@ def get_func_processing(config_processing):
         return func_processing_regex_replace
     elif type(config_processing) is ConfigProcessingSplitSentences:
         return func_processing_split_sentences
+    else:
+        raise Exception(f"no registered function for {config_processing}")
 
 
 def get_func_context_processing(config_processing):
-    if type(config_processing) in [ConfigProcessingChangeCase, ConfigProcessingRegexReplace]:
+    if type(config_processing) in [
+        ConfigProcessingChangeCase, ConfigProcessingRegexReplace, ConfigProcessingSplitSentences
+    ]:
         return processing_context_common
     elif type(config_processing) is ConfigProcessingClean:
         return processing_context_clean
+    else:
+        raise Exception(f"no registered context function for {config_processing}")
 
 
 def get_filetype_of_config(config_reading_or_writing):
@@ -233,18 +276,21 @@ def get_filetype_of_config(config_reading_or_writing):
 
 
 def func_reading_txt(config_reading, f_in, segment_start_end_list=None):
-    for i_line, line in enumerate(f_in):
+    for i_text, text in enumerate(f_in):
         if segment_start_end_list:
-            if i_line >= segment_start_end_list[0]:
-                if i_line < segment_start_end_list[1]:
-                    yield (i_line, line)
+            if i_text >= segment_start_end_list[0]:
+                if i_text < segment_start_end_list[1]:
+                    yield (i_text, text)
                 else:
                     break
         else:
-            yield (i_line, line)
+            yield (i_text, text)
+        i_text += 1
 
 
 def func_writing_txt(config_writing, text, f_out):
+    if config_writing.set_delimit_by_newline:
+        text += "\n"
     f_out.write(text)
 
 
@@ -279,7 +325,7 @@ def func_processing_regex_replace(config_processing, text):
 
 
 def func_processing_split_sentences(config_processing, text):
-    text_processed_list = sent_tokenize(text)
+    text_processed_list = sent_tokenize(text, language=config_processing.language)
     for text_processed in text_processed_list:
         yield text_processed
 
@@ -348,15 +394,13 @@ def merge_tmp_main(config_writing):
 def count_texts_of_output_individual(config_writing, file_name_pattern=None):
     num_lines = 0
     if config_writing.file_path:
-        with open(config_writing.file_path, "r") as f:
-            num_lines = count_texts_in_file(config_writing, f)
+        num_lines = count_texts_in_file(config_writing)
     else:
         num_lines = 0
         for file in os.listdir(config_writing.folder):
             config_writing.file_path = config_writing.folder + file
             if not file_name_pattern or file_name_pattern in file:
-                with open(config_writing.file_path, "r") as f:
-                    num_lines += count_texts_in_file(config_writing, f)
+                num_lines += count_texts_in_file(config_writing)
     return num_lines
 
 
@@ -369,15 +413,23 @@ def count_texts_of_output_main(config_writing):
     return num_lines
 
 
-def count_texts_in_file(config, f_in):
-    func_reading = get_func_reading(config)
+def count_texts_in_file(config):
     with open(config.file_path, "r") as f_in:
         func_reading = get_func_reading(config)
-        i_line = 0
-        for i_line, _ in func_reading(config, f_in):
+        i_text = 0
+        for i_text, _ in func_reading(config, f_in):
             pass
-    num_lines = i_line + 1
-    return num_lines
+    num_texts = i_text + 1
+    return num_texts
+
+
+def count_chars_in_text(config):
+    with open(config.file_path, "r") as f_in:
+        func_reading = get_func_reading(config)
+        text_all = ""
+        for _, text in func_reading(config, f_in):
+            text_all += text
+    return len(text_all)
 
 
 def create_segment_start_end_list_of_quantity(num_total, num_segments):
@@ -397,19 +449,21 @@ def create_segment_start_end_list_of_quantity(num_total, num_segments):
 def create_segment_start_end_list_of_file(config_reading, num_segments):
     print("- creating index segments of file -----------------------------------")
     segment_start_end_list = []
-    with open(config_reading.file_path, "r") as f_in:
-        num_lines = count_texts_in_file(config_reading, f_in)
-    segment_start_end_list = create_segment_start_end_list_of_quantity(num_lines, num_segments)
+    if type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines:
+        num_texts = count_chars_in_text(config_reading)
+    else:
+        num_texts = count_texts_in_file(config_reading)
+    segment_start_end_list = create_segment_start_end_list_of_quantity(num_texts, num_segments)
     return segment_start_end_list
 
 
 def create_percentage_segment_dict(i_start, i_end):
-    percentage_segmens = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
-    percentage_segmens = [e + i_start - 1 for s,e in percentage_segmens]
-    percentage_segment_dict = {}
-    for percentage, i_segment in enumerate(percentage_segmens, start=1):
-        percentage_segment_dict[i_segment] = percentage
-    return percentage_segment_dict
+    percentage_segments = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
+    percentage_segments = [e + i_start - 1 for s,e in percentage_segments]
+    percentage_segments_dict = {}
+    for percentage, i_segment in enumerate(percentage_segments, start=1):
+        percentage_segments_dict[i_segment] = percentage
+    return percentage_segments_dict
 
 
 def adapt_config_to_tmp(config_writing, config_processing, process_id):
@@ -473,10 +527,13 @@ def check_if_file_paths(config_reading, config_writing):
 def processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
-    percentage_segment_dict = create_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
+    percentage_segment_dict = None
+    if not (type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines):
+        percentage_segment_dict = create_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
     for i_text, text in func_reading(config_reading, f_in, start_end_segment):
         for text_processed in func_processing(config_processing, text):
-            if percentage := percentage_segment_dict.get(i_text):
+            if percentage_segment_dict and i_text in percentage_segment_dict:
+                percentage = percentage_segment_dict.get(i_text)
                 print(f"process_id: {process_id}: {percentage}%")
             yield text_processed
 
@@ -560,27 +617,29 @@ def main():
         main_process_multi(config_processing, config_reading, config_writing)
     else:
         for file in os.listdir(config_reading.folder):
-            config_reading.file_path = config_reading.folder + file
-            if type(config_writing) is ConfigWritingClean:
-                file_split = file.split(".")
-                file_name = "".join(file_split[:-1])
-                file_type = file_split[-1]
-                config_writing.config_writing_clean.file_path = (config_writing.folder + file_name
-                    + "_clean." + file_type)
-                config_writing.config_writing_dirty.file_path = (config_writing.folder + file_name
-                    + "_dirty." + file_type)
-            else:
-                config_writing.file_path = config_writing.folder + file
-            config_reading = adapt_config_to_file_type(config_reading)
-            config_writing = adapt_config_to_file_type(config_writing)
-            main_process_multi(config_processing, config_reading, config_writing)
-            config_reading.file_path = None
-            if type(config_writing) is ConfigWritingClean:
-                config_writing.config_writing_clean.file_path = None
-                config_writing.config_writing_dirty.file_path = None
+            if file not in config_reading.ignore_file:
+                print(f"processing file: {file}")
+                config_reading.file_path = config_reading.folder + file
+                if type(config_writing) is ConfigWritingClean:
+                    file_split = file.split(".")
+                    file_name = "".join(file_split[:-1])
+                    file_type = file_split[-1]
+                    config_writing.config_writing_clean.file_path = (config_writing.folder + file_name
+                        + "_clean." + file_type)
+                    config_writing.config_writing_dirty.file_path = (config_writing.folder + file_name
+                        + "_dirty." + file_type)
+                else:
+                    config_writing.file_path = config_writing.folder + file
+                config_reading = adapt_config_to_file_type(config_reading)
+                config_writing = adapt_config_to_file_type(config_writing)
+                main_process_multi(config_processing, config_reading, config_writing)
+                config_reading.file_path = None
+                if type(config_writing) is ConfigWritingClean:
+                    config_writing.config_writing_clean.file_path = None
+                    config_writing.config_writing_dirty.file_path = None
 
     # write metadata
-    if config_writing_metadata.out_metadata_file_path:
+    if config_writing_metadata:
         write_veld_data_yaml(config_writing_metadata, config_writing)
 
 
