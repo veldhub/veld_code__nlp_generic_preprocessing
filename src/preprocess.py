@@ -75,6 +75,7 @@ class ConfigProcessingRegexReplace(ConfigProcessing):
 @dataclass
 class ConfigProcessingClean(ConfigProcessing):
     min_clean_char_percentage: float = None
+    append_to_file: bool = True
 
 
 @dataclass
@@ -150,12 +151,12 @@ def get_config_writing():
     if processing_func_name == "clean":
         config_writing = ConfigWritingClean(
             config_writing_clean=ConfigWriting(
-                folder=OUT_FOLDER,
-                file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_clean")),
+                folder="/veld/output/data_clean/",
+                file_path=concatenate_folder_and_file("/veld/output/data_clean/", get_env_var("out_file_clean")),
             ),
             config_writing_dirty=ConfigWriting(
-                folder=OUT_FOLDER,
-                file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file_dirty")),
+                folder="/veld/output/data_dirty/",
+                file_path=concatenate_folder_and_file("/veld/output/data_dirty/", get_env_var("out_file_dirty")),
             ),
         )
         if not config_writing.config_writing_dirty.file_path:
@@ -220,6 +221,7 @@ def get_config_processing():
         config_processing = ConfigProcessingClean(
             **asdict(config_processing),
             min_clean_char_percentage=get_env_var("min_clean_char_percentage", float),
+            append_to_file=get_env_var_to_bool("append_to_file"),
         )
     elif processing_func_name == "split_sentences":
         config_processing = ConfigProcessingSplitSentences(
@@ -615,20 +617,24 @@ def main():
         main_process_multi(config_processing, config_reading, config_writing)
     else:
         for file in os.listdir(config_reading.folder):
-            if config_reading.ignore_file and  file not in config_reading.ignore_file:
-                continue
-            else:
+            if not(config_reading.ignore_file and file in config_reading.ignore_file):
                 print(f"processing file: {file}")
                 config_reading.file_path = config_reading.folder + file
                 if type(config_writing) is ConfigWritingClean:
                     file_split = file.split(".")
                     file_name = "".join(file_split[:-1])
                     file_type = file_split[-1]
+                    if config_processing.append_to_file:
+                        file_name_clean = file_name + "_clean"
+                        file_name_dirty = file_name + "_dirty"
+                    else:
+                        file_name_clean = file_name
+                        file_name_dirty = file_name
                     config_writing.config_writing_clean.file_path = (
-                        config_writing.config_writing_clean.folder + file_name + "_clean." 
+                        config_writing.config_writing_clean.folder + file_name_clean + "." 
                         + file_type)
                     config_writing.config_writing_dirty.file_path = (
-                        config_writing.config_writing_dirty.folder + file_name + "_dirty." 
+                        config_writing.config_writing_dirty.folder + file_name_dirty + "." 
                         + file_type)
                 else:
                     config_writing.file_path = config_writing.folder + file
