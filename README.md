@@ -1,8 +1,9 @@
-# ![veld code](https://raw.githubusercontent.com/veldhub/.github/refs/heads/main/images/symbol_V_letter.png) veld_code__REPLACE
+# ![veld code](https://raw.githubusercontent.com/veldhub/.github/refs/heads/main/images/symbol_V_letter.png) veld_code__nlp_generic_preprocessing
 
 \*\* work in progress \*\*
 
-This repo contains [code velds](https://zenodo.org/records/13322913) encapsulating REPLACE
+This repo contains [code velds](https://zenodo.org/records/13322913) encapsulating generic NLP
+preprocessing
 
 ## requirements
 
@@ -21,13 +22,4 @@ Run a veld with:
 docker compose -f <VELD_NAME>.yaml up
 ```
 
-## contained code velds
-
-**[./veldREPLACE.yaml](./veldREPLACE.yaml)** 
-
-REPLACE
-
-```
-docker compose -f veldREPLACE.yaml up
-```
 
