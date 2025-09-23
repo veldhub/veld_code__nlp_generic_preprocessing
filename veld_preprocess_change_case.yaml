@@ -1,7 +1,7 @@
 # TODO: update metadata
 x-veld:
   code:
-    description: "makes entire text lowercase"
+    description: "changes case of text."
     topic: 
       - "NLP"
       - "Preprocessing"
@@ -23,6 +23,9 @@ x-veld:
       - environment_var: out_data_description
         description: "automatic data description for generating a data veld yaml file"
         var_type: "str" 
+      - environment_var: set_case
+        description: "must be either set to 'upper' or 'lower'."
+        var_type: "str"
 
 services:
   veld_preprocess_change_case:
