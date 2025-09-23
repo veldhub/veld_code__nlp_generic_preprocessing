@@ -8,6 +8,7 @@ from dataclasses import dataclass, asdict
 from multiprocessing import Process
 from typing import List
 
+import spacy
 import yaml
 from nltk.tokenize import sent_tokenize
 
@@ -83,10 +84,17 @@ class ConfigProcessingSplitSentences(ConfigProcessing):
     language: str = None
 
 
-def get_env_var(var_name, cast_func=None, mandatory=False):
+@dataclass
+class ConfigProcessingLemmatize(ConfigProcessing):
+    nlp: spacy.lang = None
+
+
+def get_env_var(var_name, cast_func=None, mandatory=False, default=None):
     var_content = os.getenv(var_name)
     if var_content is not None:
         print(f"{var_name}: {var_content.__repr__()}")
+    elif default is not None:
+        var_content = default
     elif mandatory:
         raise Exception(f"environment variable: '{var_name}' is mandatory")
     if cast_func:
@@ -194,8 +202,13 @@ def get_config_writing_metadata():
 def get_config_processing():
     processing_func_name = get_processing_func_name()
     print(f"processing: {processing_func_name}")
+    max_cpu_count = os.cpu_count()
+    if max_cpu_count >= 4:
+        max_cpu_count -= 2
+    else:
+        max_cpu_count = 1
     config_processing = ConfigProcessing(
-        cpu_count=get_env_var("cpu_count", int),
+        cpu_count=get_env_var("cpu_count", int, default=max_cpu_count),
     )
     if processing_func_name == "change_case":
         config_processing = ConfigProcessingChangeCase(
@@ -228,8 +241,16 @@ def get_config_processing():
             **asdict(config_processing),
             language=get_env_var("language", mandatory=True),
         )
+    elif processing_func_name == "lemmatize":
+        nlp = spacy.load(get_env_var("spacy_model", mandatory=True))
+        config_processing = ConfigProcessingLemmatize(
+            **asdict(config_processing),
+            nlp=nlp,
+        )
     else:
-        raise Exception("could not determine config_processing")
+        raise Exception(
+            f"could not determine config_processing for func_name: {processing_func_name}"
+        )
     return config_processing
 
 
@@ -256,19 +277,24 @@ def get_func_processing(config_processing):
         return func_processing_regex_replace
     elif type(config_processing) is ConfigProcessingSplitSentences:
         return func_processing_split_sentences
+    elif type(config_processing) is ConfigProcessingLemmatize:
+        return func_processing_lemmatize
     else:
         raise Exception(f"no registered function for {config_processing}")
 
 
 def get_func_context_processing(config_processing):
     if type(config_processing) in [
-        ConfigProcessingChangeCase, ConfigProcessingRegexReplace, ConfigProcessingSplitSentences
+        ConfigProcessingChangeCase,
+        ConfigProcessingRegexReplace,
+        ConfigProcessingSplitSentences,
+        ConfigProcessingLemmatize,
     ]:
         return processing_context_common
     elif type(config_processing) is ConfigProcessingClean:
         return processing_context_clean
     else:
-        raise Exception(f"no registered context function for {config_processing}")
+        raise Exception(f"no registered context function for: {config_processing}")
 
 
 def get_filetype_of_config(config_reading_or_writing):
@@ -300,8 +326,7 @@ def func_processing_change_case(config_processing, text):
         func_case = str.upper
     elif config_processing.set_case == "lower":
         func_case = str.lower
-    text_processed = func_case(text)
-    yield text_processed
+    yield func_case(text)
 
 
 def func_processing_clean(config_processing, text):
@@ -321,14 +346,22 @@ def func_processing_clean(config_processing, text):
 
 
 def func_processing_regex_replace(config_processing, text):
-    text_processed = re.sub(config_processing.regex_pattern_match, config_processing.regex_pattern_replacement, text)
-    yield text_processed
+    yield re.sub(
+        config_processing.regex_pattern_match,
+        config_processing.regex_pattern_replacement,
+        text,
+    )
 
 
 def func_processing_split_sentences(config_processing, text):
     text_processed_list = sent_tokenize(text, language=config_processing.language)
     for text_processed in text_processed_list:
         yield text_processed
+
+
+def func_processing_lemmatize(config_processing, text):
+    doc = config_processing.nlp(text)
+    yield " ".join([t.lemma_ for t in doc])
 
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
