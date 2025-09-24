@@ -16,7 +16,7 @@ from nltk.tokenize import sent_tokenize
 IN_FOLDER = "/veld/input/"
 OUT_FOLDER = "/veld/output/data/"
 OUT_METADATA_FOLDER = "/veld/output/metadata/"
-TMP_FOLDER = "/tmp/"
+TMP_FOLDER = "/veld/output/tmp/"
 
 
 @dataclass
@@ -233,7 +233,7 @@ def create_config_processing():
     elif processing_func_name == "clean":
         config_processing = ConfigProcessingClean(
             **asdict(config_processing),
-            min_clean_char_percentage=get_env_var("min_clean_char_percentage", float),
+            min_clean_char_percentage=get_env_var("min_percentage_char", float),
             append_to_file=get_env_var_to_bool("append_to_file"),
         )
     elif processing_func_name == "split_sentences":
@@ -522,8 +522,12 @@ def adapt_config_to_tmp(config_writing, config_processing, process_id):
 
 def adapt_config_to_file_type(config_reading_or_writing):
     if type(config_reading_or_writing) is ConfigWritingClean:
-        config_reading_or_writing.config_writing_clean = adapt_config_to_file_type(config_reading_or_writing.config_writing_clean)
-        config_reading_or_writing.config_writing_dirty = adapt_config_to_file_type(config_reading_or_writing.config_writing_dirty)
+        config_reading_or_writing.config_writing_clean = adapt_config_to_file_type(
+            config_reading_or_writing.config_writing_clean
+        )
+        config_reading_or_writing.config_writing_dirty = adapt_config_to_file_type(
+            config_reading_or_writing.config_writing_dirty
+        )
     else:
         try:
             file_path = config_reading_or_writing.file_path
@@ -537,6 +541,8 @@ def adapt_config_to_file_type(config_reading_or_writing):
         if file_type == "txt":
             if type(config_reading_or_writing) is ConfigReading:
                 config_reading_or_writing = ConfigReadingTxt(**asdict(config_reading_or_writing))
+                if config_reading_or_writing.txt_has_lines is None:
+                    config_reading_or_writing.txt_has_lines = True
             elif type(config_reading_or_writing) is ConfigWriting:
                 config_reading_or_writing = ConfigWritingTxt(**asdict(config_reading_or_writing))
     return config_reading_or_writing
@@ -605,6 +611,7 @@ def main_process_multi(config_processing, config_reading, config_writing):
     process_list = []
     for process_id, segment_start_end in enumerate(segment_start_end_list):
         config_writing_per_process = adapt_config_to_tmp(config_writing, config_processing, process_id)
+        print(f"- process_id {process_id}: start -----------------------------------------------")
         if DEBUG_SINGLE_PROCESS:
             func_context_processing(
                 config_processing,

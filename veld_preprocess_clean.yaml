@@ -59,6 +59,7 @@ services:
       out_metadata_description: null
       out_metadata_topic: "NLP,ETL"
       out_metadata_content: "training data,demo data"
-      min_char_percentage: null
-      cpu_count: 1
+      min_percentage_char: null
+      cpu_count: null
+      txt_has_lines: null
 
