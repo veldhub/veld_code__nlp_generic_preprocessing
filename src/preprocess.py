@@ -139,7 +139,7 @@ def get_processing_func_name():
     return processing_func_name
 
 
-def get_config_reading():
+def create_config_reading():
     config_reading = ConfigReading(
         folder=IN_FOLDER,
         file_path=concatenate_folder_and_file(IN_FOLDER, get_env_var("in_file")),
@@ -154,7 +154,7 @@ def get_config_reading():
     return config_reading
 
 
-def get_config_writing():
+def create_config_writing():
     processing_func_name = get_processing_func_name()
     if processing_func_name == "clean":
         config_writing = ConfigWritingClean(
@@ -183,7 +183,7 @@ def get_config_writing():
     return config_writing
 
 
-def get_config_writing_metadata():
+def create_config_writing_metadata():
     out_metadata_file = get_env_var("out_metadata_file")
     if out_metadata_file:
         out_metadata_file_path = OUT_METADATA_FOLDER + out_metadata_file
@@ -199,7 +199,7 @@ def get_config_writing_metadata():
         return None
 
 
-def get_config_processing():
+def create_config_processing():
     processing_func_name = get_processing_func_name()
     print(f"processing: {processing_func_name}")
     max_cpu_count = os.cpu_count()
@@ -638,10 +638,10 @@ def main():
 
     # config reading
     print("- preparing --------------------------------------------------------")
-    config_reading = get_config_reading()
-    config_writing = get_config_writing()
-    config_writing_metadata = get_config_writing_metadata()
-    config_processing = get_config_processing()
+    config_reading = create_config_reading()
+    config_writing = create_config_writing()
+    config_writing_metadata = create_config_writing_metadata()
+    config_processing = create_config_processing()
 
     # config adaptions and calling into main_process_multi
     if check_if_file_paths(config_reading, config_writing):
