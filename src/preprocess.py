@@ -1,5 +1,6 @@
 import copy
 import os
+import random
 import re
 import subprocess
 import sys
@@ -87,6 +88,12 @@ class ConfigProcessingSplitSentences(ConfigProcessing):
 @dataclass
 class ConfigProcessingLemmatize(ConfigProcessing):
     nlp: spacy.lang = None
+
+
+@dataclass
+class ConfigProcessingSample(ConfigProcessing):
+    sample_random_seed: str = None
+    percentage_sample: float = None
 
 
 def get_env_var(var_name, cast_func=None, mandatory=False, default=None):
@@ -247,6 +254,12 @@ def create_config_processing():
             **asdict(config_processing),
             nlp=nlp,
         )
+    elif processing_func_name == "sample":
+        config_processing = ConfigProcessingSample(
+            **asdict(config_processing),
+            sample_random_seed=get_env_var("sample_random_seed", str),
+            percentage_sample=get_env_var("percentage_sample", float),
+        )
     else:
         raise Exception(
             f"could not determine config_processing for func_name: {processing_func_name}"
@@ -281,20 +294,6 @@ def get_func_processing(config_processing):
         return func_processing_lemmatize
     else:
         raise Exception(f"no registered function for {config_processing}")
-
-
-def get_func_context_processing(config_processing):
-    if type(config_processing) in [
-        ConfigProcessingChangeCase,
-        ConfigProcessingRegexReplace,
-        ConfigProcessingSplitSentences,
-        ConfigProcessingLemmatize,
-    ]:
-        return processing_context_common
-    elif type(config_processing) is ConfigProcessingClean:
-        return processing_context_clean
-    else:
-        raise Exception(f"no registered context function for: {config_processing}")
 
 
 def get_filetype_of_config(config_reading_or_writing):
@@ -480,24 +479,37 @@ def create_segment_start_end_list_of_quantity(num_total, num_segments):
     return segment_start_end_list
 
 
-def create_segment_start_end_list_of_file(config_reading, num_segments):
-    print("- creating index segments of file -----------------------------------")
-    segment_start_end_list = []
+def count_texts(config_reading):
     if type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines:
         num_texts = count_chars_in_text(config_reading)
     else:
         num_texts = count_texts_in_file(config_reading)
+    return num_texts
+
+
+def create_segment_start_end_list_of_file(config_reading, num_segments):
+    print("- creating index segments of file -----------------------------------")
+    segment_start_end_list = []
+    num_texts = count_texts(config_reading)
     segment_start_end_list = create_segment_start_end_list_of_quantity(num_texts, num_segments)
     return segment_start_end_list
 
 
-def create_percentage_segment_dict(i_start, i_end):
-    percentage_segments = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
-    percentage_segments = [e + i_start - 1 for s,e in percentage_segments]
-    percentage_segments_dict = {}
-    for percentage, i_segment in enumerate(percentage_segments, start=1):
-        percentage_segments_dict[i_segment] = percentage
-    return percentage_segments_dict
+def create_percentage_segment_dict(config_reading, i_start, i_end):
+    percentage_segment_dict = None
+    if not (type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines):
+        percentage_segment = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
+        percentage_segment = [e + i_start - 1 for s,e in percentage_segment]
+        percentage_segment_dict = {}
+        for percentage, i_segment in enumerate(percentage_segment, start=1):
+            percentage_segment_dict[i_segment] = percentage
+    return percentage_segment_dict
+
+
+def print_status(percentage_segment_dict, i_text, process_id):
+    if percentage_segment_dict and i_text in percentage_segment_dict:
+        percentage = percentage_segment_dict.get(i_text)
+        print(f"process_id: {process_id}: {percentage}%")
 
 
 def adapt_config_to_tmp(config_writing, config_processing, process_id):
@@ -564,56 +576,85 @@ def check_if_file_paths(config_reading, config_writing):
         return False
 
 
-def processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
+def processing_chain_common(config_processing, config_reading, config_writing, process_id, start_end_segment):
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
-    percentage_segment_dict = None
-    if not (type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines):
-        percentage_segment_dict = create_percentage_segment_dict(start_end_segment[0], start_end_segment[1])
-    for i_text, text in func_reading(config_reading, f_in, start_end_segment):
-        for text_processed in func_processing(config_processing, text):
-            if percentage_segment_dict and i_text in percentage_segment_dict:
-                percentage = percentage_segment_dict.get(i_text)
-                print(f"process_id: {process_id}: {percentage}%")
-            yield text_processed
-
-
-def processing_context_common(config_processing, config_reading, config_writing, process_id, start_end_segment):
+    func_writing = get_func_writing(config_writing)
+    percentage_segment_dict = create_percentage_segment_dict(
+        config_reading, start_end_segment[0], start_end_segment[1]
+    )
+    # TODO: such context managers can be outsourced to functions that do `with` and then `for` +
+    # `yield`
     with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
-        func_writing = get_func_writing(config_writing)
-        for text_processed in processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
-            func_writing(config_writing, text_processed, f_out)
+        for i_text, text in func_reading(config_reading, f_in, start_end_segment):
+            for text_processed in func_processing(config_processing, text):
+                print_status(percentage_segment_dict, i_text, process_id)
+                func_writing(config_writing, text_processed, f_out)
 
 
-def processing_context_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
+def processing_chain_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
+    func_reading = get_func_reading(config_reading)
+    func_writing_clean = get_func_writing(config_writing.config_writing_clean)
+    func_writing_dirty = get_func_writing(config_writing.config_writing_dirty)
+    percentage_segment_dict = create_percentage_segment_dict(
+        config_reading, start_end_segment[0], start_end_segment[1]
+    )
     with (
         open(config_reading.file_path, "r") as f_in, 
         open(config_writing.config_writing_clean.file_path, "w") as f_out_clean,
         open(config_writing.config_writing_dirty.file_path, "w") as f_out_dirty,
     ):
-        func_writing_clean = get_func_writing(config_writing.config_writing_clean)
-        func_writing_dirty = get_func_writing(config_writing.config_writing_dirty)
-        for text_processed, is_text_processed_clean in processing_execution(config_processing, config_reading, process_id, start_end_segment, f_in):
-            if is_text_processed_clean:
-                func_writing_clean(config_writing.config_writing_clean, text_processed, f_out_clean)
-            else:
-                func_writing_dirty(config_writing.config_writing_dirty, text_processed, f_out_dirty)
+        for i_text, text in func_reading(config_reading, f_in, start_end_segment):
+            for text_processed, is_text_processed_clean in func_processing_clean(config_processing, text):
+                print_status(percentage_segment_dict, i_text, process_id)
+                if is_text_processed_clean:
+                    func_writing_clean(config_writing.config_writing_clean, text_processed, f_out_clean)
+                else:
+                    func_writing_dirty(config_writing.config_writing_dirty, text_processed, f_out_dirty)
 
 
-def main_process_multi(config_processing, config_reading, config_writing):
+def processing_chain_sample(config_processing, config_reading, config_writing):
+    num_texts = count_texts(config_reading)
+    text_indices_list = list(range(0, num_texts))    
+    absolute_sample = int((len(text_indices_list) / 100) * config_processing.percentage_sample)
+    random.seed(config_processing.sample_random_seed)
+    rand_indices = set(random.sample(text_indices_list, absolute_sample))
+    func_reading = get_func_reading(config_reading)
+    func_writing = get_func_writing(config_writing)
+    with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
+        for i_text, text in func_reading(config_reading, f_in):
+            if i_text in rand_indices:
+                  func_writing(config_writing, text, f_out)
+
+
+def get_processing_chain(config_processing):
+    if type(config_processing) in [
+        ConfigProcessingChangeCase,
+        ConfigProcessingRegexReplace,
+        ConfigProcessingSplitSentences,
+        ConfigProcessingLemmatize,
+    ]:
+        return processing_chain_common
+    elif type(config_processing) is ConfigProcessingClean:
+        return processing_chain_clean
+    elif type(config_processing) is ConfigProcessingSample:
+        return processing_chain_sample
+    else:
+        raise Exception(f"no registered context function for: {config_processing}")
+
+
+def initiate_processing_multi(processing_chain, config_processing, config_reading, config_writing):
     DEBUG_SINGLE_PROCESS = False
-    print("- all processing start ----------------------------------------------")
     segment_start_end_list = create_segment_start_end_list_of_file(
         config_reading, 
         config_processing.cpu_count
     )
-    func_context_processing = get_func_context_processing(config_processing)
     process_list = []
     for process_id, segment_start_end in enumerate(segment_start_end_list):
         config_writing_per_process = adapt_config_to_tmp(config_writing, config_processing, process_id)
         print(f"- process_id {process_id}: start -----------------------------------------------")
         if DEBUG_SINGLE_PROCESS:
-            func_context_processing(
+            processing_chain(
                 config_processing,
                 config_reading,
                 config_writing_per_process,
@@ -622,7 +663,7 @@ def main_process_multi(config_processing, config_reading, config_writing):
             )
         else:
             process = Process(
-                target=func_context_processing,
+                target=processing_chain,
                 args=(
                     config_processing,
                     config_reading,
@@ -636,9 +677,19 @@ def main_process_multi(config_processing, config_reading, config_writing):
     if not DEBUG_SINGLE_PROCESS:
         for process in process_list:
             process.join()
-    print("- all processing done -----------------------------------------------")
     if config_processing.cpu_count > 1:
         merge_tmp_main(config_writing)
+
+
+def initiate_processing(config_processing, config_reading, config_writing):
+    print("- all processing start ----------------------------------------------")
+    processing_chain = get_processing_chain(config_processing)
+    if processing_chain is processing_chain_sample:
+        processing_chain_sample(config_processing, config_reading, config_writing)
+    else:
+        initiate_processing_multi(processing_chain, config_processing, config_reading, config_writing)
+    print("- all processing done -----------------------------------------------")
+
 
 
 def main():
@@ -650,11 +701,10 @@ def main():
     config_writing_metadata = create_config_writing_metadata()
     config_processing = create_config_processing()
 
-    # config adaptions and calling into main_process_multi
     if check_if_file_paths(config_reading, config_writing):
         config_reading = adapt_config_to_file_type(config_reading)
         config_writing = adapt_config_to_file_type(config_writing)
-        main_process_multi(config_processing, config_reading, config_writing)
+        initiate_processing(config_processing, config_reading, config_writing)
     else:
         for file in os.listdir(config_reading.folder):
             if not(config_reading.ignore_file and file in config_reading.ignore_file):
@@ -680,7 +730,7 @@ def main():
                     config_writing.file_path = config_writing.folder + file
                 config_reading = adapt_config_to_file_type(config_reading)
                 config_writing = adapt_config_to_file_type(config_writing)
-                main_process_multi(config_processing, config_reading, config_writing)
+                initiate_processing(config_processing, config_reading, config_writing)
                 config_reading.file_path = None
                 if type(config_writing) is ConfigWritingClean:
                     config_writing.config_writing_clean.file_path = None
