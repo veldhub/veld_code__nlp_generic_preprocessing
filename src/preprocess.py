@@ -301,17 +301,18 @@ def get_filetype_of_config(config_reading_or_writing):
         return "txt"
 
 
-def func_reading_txt(config_reading, f_in, segment_start_end_list=None):
-    for i_text, text in enumerate(f_in):
-        if segment_start_end_list:
-            if i_text >= segment_start_end_list[0]:
-                if i_text < segment_start_end_list[1]:
-                    yield (i_text, text)
-                else:
-                    break
-        else:
-            yield (i_text, text)
-        i_text += 1
+def func_reading_txt(config_reading, segment_start_end_list=None):
+    with open(config_reading.file_path, "r") as f_in:
+        for i_text, text in enumerate(f_in):
+            if segment_start_end_list:
+                if i_text >= segment_start_end_list[0]:
+                    if i_text < segment_start_end_list[1]:
+                        yield (i_text, text)
+                    else:
+                        break
+            else:
+                yield (i_text, text)
+            i_text += 1
 
 
 def func_writing_txt(config_writing, text, f_out):
@@ -447,11 +448,10 @@ def count_texts_of_output_main(config_writing):
 
 
 def count_texts_in_file(config):
-    with open(config.file_path, "r") as f_in:
-        func_reading = get_func_reading(config)
-        i_text = 0
-        for i_text, _ in func_reading(config, f_in):
-            pass
+    func_reading = get_func_reading(config)
+    i_text = 0
+    for i_text, _ in func_reading(config):
+        pass
     num_texts = i_text + 1
     return num_texts
 
@@ -613,10 +613,10 @@ def processing_chain_sample(config_processing, config_reading, config_writing):
     rand_indices = set(random.sample(text_indices_list, absolute_sample))
     func_reading = get_func_reading(config_reading)
     func_writing = get_func_writing(config_writing)
-    with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
-        for i_text, text in func_reading(config_reading, f_in):
-            if i_text in rand_indices:
-                  func_writing(config_writing, text, f_out)
+    # with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
+    for i_text, text in func_reading(config_reading):
+        if i_text in rand_indices:
+              func_writing(config_writing, text)
 
 
 def get_processing_chain(config_processing):
