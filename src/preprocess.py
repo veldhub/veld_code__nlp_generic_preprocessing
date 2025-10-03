@@ -541,15 +541,7 @@ def adapt_config_to_file_type(config_reading_or_writing):
             config_reading_or_writing.config_writing_dirty
         )
     else:
-        try:
-            file_path = config_reading_or_writing.file_path
-        except:
-            pass
-        try:
-            file_path = config_reading_or_writing.file_path
-        except:
-            pass
-        file_type = file_path.split(".")[-1]
+        file_type = config_reading_or_writing.file_path.split(".")[-1]
         if file_type == "txt":
             if type(config_reading_or_writing) is ConfigReading:
                 config_reading_or_writing = ConfigReadingTxt(**asdict(config_reading_or_writing))
