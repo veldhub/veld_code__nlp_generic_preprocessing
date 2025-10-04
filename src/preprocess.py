@@ -587,8 +587,8 @@ def processing_chain_common(config_processing, config_reading, config_writing, p
         config_reading, config_reading.segment_start, config_reading.segment_end
     )
     for i_text, text in func_reading(config_reading):
+        print_status(percentage_segment_dict, i_text, process_id)
         for text_processed in func_processing(config_processing, text):
-            print_status(percentage_segment_dict, i_text, process_id)
             coroutine_writing.send(text_processed)
     coroutine_writing.close()
 
@@ -597,7 +597,11 @@ def processing_chain_clean(config_processing, config_reading, config_writing, pr
     func_reading = get_func_reading(config_reading)
     coroutine_writing_clean = get_coroutine_writing(config_writing.config_writing_clean)
     coroutine_writing_dirty = get_coroutine_writing(config_writing.config_writing_dirty)
+    percentage_segment_dict = create_percentage_segment_dict(
+        config_reading, config_reading.segment_start, config_reading.segment_end
+    )
     for i_text, text in func_reading(config_reading):
+        print_status(percentage_segment_dict, i_text, process_id)
         for text_processed, is_text_processed_clean in func_processing_clean(config_processing, text):
             if is_text_processed_clean:
                 coroutine_writing_clean.send(text_processed)
