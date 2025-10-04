@@ -274,11 +274,13 @@ def get_func_reading(config_reading):
         raise Exception(f"no registered function for {config_reading}")
 
 
-def get_func_writing(config_writing):
+def get_coroutine_writing(config_writing):
     if type(config_writing) is ConfigWritingTxt:
-        return func_writing_txt
+        coroutine_writing = coroutine_writing_txt(config_writing)
     else:
         raise Exception(f"no registered function for {config_writing}")
+    next(coroutine_writing)
+    return coroutine_writing
 
 
 def get_func_processing(config_processing):
@@ -315,10 +317,13 @@ def func_reading_txt(config_reading, segment_start_end_list=None):
             i_text += 1
 
 
-def func_writing_txt(config_writing, text, f_out):
-    if config_writing.set_delimit_by_newline:
-        text += "\n"
-    f_out.write(text)
+def coroutine_writing_txt(config_writing):
+    with open(config_writing.file_path, "w") as f:
+        while True:
+            text = (yield)
+            if config_writing.set_delimit_by_newline:
+                text += "\n"
+            f.write(text)
 
 
 def func_processing_change_case(config_processing, text):
@@ -571,38 +576,27 @@ def check_if_file_paths(config_reading, config_writing):
 def processing_chain_common(config_processing, config_reading, config_writing, process_id, start_end_segment):
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
-    func_writing = get_func_writing(config_writing)
-    percentage_segment_dict = create_percentage_segment_dict(
-        config_reading, start_end_segment[0], start_end_segment[1]
-    )
-    # TODO: such context managers can be outsourced to functions that do `with` and then `for` +
-    # `yield`
-    with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
-        for i_text, text in func_reading(config_reading, f_in, start_end_segment):
-            for text_processed in func_processing(config_processing, text):
-                print_status(percentage_segment_dict, i_text, process_id)
-                func_writing(config_writing, text_processed, f_out)
+    coroutine_writing = get_coroutine_writing(config_writing)
+    # TODO: move this to reader func:
+    # percentage_segment_dict = create_percentage_segment_dict(
+    #     config_reading, start_end_segment[0], start_end_segment[1]
+    # )
+    for i_text, text in func_reading(config_reading, start_end_segment):
+        for text_processed in func_processing(config_processing, text):
+            coroutine_writing.send(text_processed)
+    coroutine_writing.send(None)
 
 
 def processing_chain_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
     func_reading = get_func_reading(config_reading)
-    func_writing_clean = get_func_writing(config_writing.config_writing_clean)
-    func_writing_dirty = get_func_writing(config_writing.config_writing_dirty)
-    percentage_segment_dict = create_percentage_segment_dict(
-        config_reading, start_end_segment[0], start_end_segment[1]
-    )
-    with (
-        open(config_reading.file_path, "r") as f_in, 
-        open(config_writing.config_writing_clean.file_path, "w") as f_out_clean,
-        open(config_writing.config_writing_dirty.file_path, "w") as f_out_dirty,
-    ):
-        for i_text, text in func_reading(config_reading, f_in, start_end_segment):
-            for text_processed, is_text_processed_clean in func_processing_clean(config_processing, text):
-                print_status(percentage_segment_dict, i_text, process_id)
-                if is_text_processed_clean:
-                    func_writing_clean(config_writing.config_writing_clean, text_processed, f_out_clean)
-                else:
-                    func_writing_dirty(config_writing.config_writing_dirty, text_processed, f_out_dirty)
+    coroutine_writing_clean = get_coroutine_writing(config_writing.config_writing_clean)
+    coroutine_writing_dirty = get_coroutine_writing(config_writing.config_writing_dirty)
+    for i_text, text in func_reading(config_reading, start_end_segment):
+        for text_processed, is_text_processed_clean in func_processing_clean(config_processing, text):
+            if is_text_processed_clean:
+                coroutine_writing_clean(config_writing.config_writing_clean, text_processed)
+            else:
+                coroutine_writing_dirty(config_writing.config_writing_dirty, text_processed)
 
 
 def processing_chain_sample(config_processing, config_reading, config_writing):
@@ -612,11 +606,11 @@ def processing_chain_sample(config_processing, config_reading, config_writing):
     random.seed(config_processing.sample_random_seed)
     rand_indices = set(random.sample(text_indices_list, absolute_sample))
     func_reading = get_func_reading(config_reading)
-    func_writing = get_func_writing(config_writing)
-    # with open(config_reading.file_path, "r") as f_in, open(config_writing.file_path, "w") as f_out:
+    coroutine_writing = get_coroutine_writing(config_writing)
     for i_text, text in func_reading(config_reading):
         if i_text in rand_indices:
-              func_writing(config_writing, text)
+            coroutine_writing.send(text)
+    coroutine_writing.close()
 
 
 def get_processing_chain(config_processing):
