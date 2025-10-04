@@ -41,7 +41,7 @@ services:
     build: .
     volumes:
       - ./src/:/veld/code/:z
-    command: python3 /veld/code/preprocess_sample.py
+    command: python -u /veld/code/preprocess.py sample
     environment:
       in_file: null
       out_file: null
