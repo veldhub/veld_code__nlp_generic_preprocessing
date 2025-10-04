@@ -25,6 +25,8 @@ class ConfigReading:
     folder: str = None
     file_path: str = None
     ignore_file: List[str] = None
+    segment_start: int = None
+    segment_end: int = None
 
 
 @dataclass
@@ -303,18 +305,18 @@ def get_filetype_of_config(config_reading_or_writing):
         return "txt"
 
 
-def func_reading_txt(config_reading, segment_start_end_list=None):
+def func_reading_txt(config_reading):
     with open(config_reading.file_path, "r") as f_in:
-        for i_text, text in enumerate(f_in):
-            if segment_start_end_list:
-                if i_text >= segment_start_end_list[0]:
-                    if i_text < segment_start_end_list[1]:
+        if config_reading.segment_start is not None and config_reading.segment_end is not None:
+            for i_text, text in enumerate(f_in):
+                if i_text >= config_reading.segment_start:
+                    if i_text < config_reading.segment_end:
                         yield (i_text, text)
                     else:
                         break
-            else:
+        else:
+            for i_text, text in enumerate(f_in):
                 yield (i_text, text)
-            i_text += 1
 
 
 def coroutine_writing_txt(config_writing):
@@ -494,17 +496,21 @@ def count_texts(config_reading):
 
 def create_segment_start_end_list_of_file(config_reading, num_segments):
     print("- creating index segments of file -----------------------------------")
-    segment_start_end_list = []
     num_texts = count_texts(config_reading)
-    segment_start_end_list = create_segment_start_end_list_of_quantity(num_texts, num_segments)
-    return segment_start_end_list
+    config_reading_list = []
+    for start, end in  create_segment_start_end_list_of_quantity(num_texts, num_segments):
+        config_reading_copy = copy.copy(config_reading)
+        config_reading_copy.segment_start = start
+        config_reading_copy.segment_end = end
+        config_reading_list.append(config_reading_copy)
+    return config_reading_list
 
 
 def create_percentage_segment_dict(config_reading, i_start, i_end):
     percentage_segment_dict = None
     if not (type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines):
         percentage_segment = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
-        percentage_segment = [e + i_start - 1 for s,e in percentage_segment]
+        percentage_segment = [e + i_start - 1 for s, e in percentage_segment]
         percentage_segment_dict = {}
         for percentage, i_segment in enumerate(percentage_segment, start=1):
             percentage_segment_dict[i_segment] = percentage
@@ -573,30 +579,32 @@ def check_if_file_paths(config_reading, config_writing):
         return False
 
 
-def processing_chain_common(config_processing, config_reading, config_writing, process_id, start_end_segment):
+def processing_chain_common(config_processing, config_reading, config_writing, process_id):
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
     coroutine_writing = get_coroutine_writing(config_writing)
-    # TODO: move this to reader func:
-    # percentage_segment_dict = create_percentage_segment_dict(
-    #     config_reading, start_end_segment[0], start_end_segment[1]
-    # )
-    for i_text, text in func_reading(config_reading, start_end_segment):
+    percentage_segment_dict = create_percentage_segment_dict(
+        config_reading, config_reading.segment_start, config_reading.segment_end
+    )
+    for i_text, text in func_reading(config_reading):
         for text_processed in func_processing(config_processing, text):
+            print_status(percentage_segment_dict, i_text, process_id)
             coroutine_writing.send(text_processed)
-    coroutine_writing.send(None)
+    coroutine_writing.close()
 
 
-def processing_chain_clean(config_processing, config_reading, config_writing, process_id, start_end_segment):
+def processing_chain_clean(config_processing, config_reading, config_writing, process_id):
     func_reading = get_func_reading(config_reading)
     coroutine_writing_clean = get_coroutine_writing(config_writing.config_writing_clean)
     coroutine_writing_dirty = get_coroutine_writing(config_writing.config_writing_dirty)
-    for i_text, text in func_reading(config_reading, start_end_segment):
+    for i_text, text in func_reading(config_reading):
         for text_processed, is_text_processed_clean in func_processing_clean(config_processing, text):
             if is_text_processed_clean:
-                coroutine_writing_clean(config_writing.config_writing_clean, text_processed)
+                coroutine_writing_clean.send(text_processed)
             else:
-                coroutine_writing_dirty(config_writing.config_writing_dirty, text_processed)
+                coroutine_writing_dirty.send(text_processed)
+    coroutine_writing_clean.close()
+    coroutine_writing_dirty.close()
 
 
 def processing_chain_sample(config_processing, config_reading, config_writing):
@@ -630,32 +638,30 @@ def get_processing_chain(config_processing):
 
 
 def initiate_processing_multi(processing_chain, config_processing, config_reading, config_writing):
-    DEBUG_SINGLE_PROCESS = False
-    segment_start_end_list = create_segment_start_end_list_of_file(
+    DEBUG_SINGLE_PROCESS = True
+    config_reading_list = create_segment_start_end_list_of_file(
         config_reading, 
         config_processing.cpu_count
     )
     process_list = []
-    for process_id, segment_start_end in enumerate(segment_start_end_list):
+    for process_id, config_reading_per_process in enumerate(config_reading_list):
         config_writing_per_process = adapt_config_to_tmp(config_writing, config_processing, process_id)
         print(f"- process_id {process_id}: start -----------------------------------------------")
         if DEBUG_SINGLE_PROCESS:
             processing_chain(
                 config_processing,
-                config_reading,
+                config_reading_per_process,
                 config_writing_per_process,
                 process_id, 
-                segment_start_end, 
             )
         else:
             process = Process(
                 target=processing_chain,
                 args=(
                     config_processing,
-                    config_reading,
+                    config_reading_per_process,
                     config_writing_per_process,
                     process_id, 
-                    segment_start_end, 
                 )
             )
             process.start()
