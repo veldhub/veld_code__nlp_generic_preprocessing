@@ -175,12 +175,14 @@ def create_config_writing():
                 file_path=concatenate_folder_and_file(
                     "/veld/output/data_clean/", get_env_var("out_file_clean")
                 ),
+                buffer_size=get_env_var("buffer_size", int),
             ),
             config_writing_dirty=ConfigWriting(
                 folder="/veld/output/data_dirty/",
                 file_path=concatenate_folder_and_file(
                     "/veld/output/data_dirty/", get_env_var("out_file_dirty")
                 ),
+                buffer_size=get_env_var("buffer_size", int),
             ),
         )
         if not config_writing.config_writing_dirty.file_path:
