@@ -110,7 +110,9 @@ def get_env_var(var_name, cast_func=None, mandatory=False, default=None):
         try:
             var_content = cast_func(var_content)
         except:
-            raise Exception(f"Could not convert var '{var_name}' to {cast_func}")
+            raise Exception(
+                f"Could not convert var '{var_name}' with content '{var_content}' to {cast_func}"
+            )
     return var_content
 
 
@@ -193,7 +195,7 @@ def create_config_writing():
         config_writing = ConfigWriting(
             folder=OUT_FOLDER,
             file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
-            buffer_size=get_env_var("buffer_size", int)
+            buffer_size=get_env_var("buffer_size", int),
         )
     config_writing = adapt_config_to_file_type(config_writing)
     return config_writing
