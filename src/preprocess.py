@@ -52,7 +52,7 @@ class ConfigWritingClean(ConfigWriting):
 
 
 @dataclass
-class ConfigWritingMetadata():
+class ConfigWritingMetadata:
     out_metadata_folder: str = None
     out_metadata_file_path: str = None
     out_metadata_description: str = None
@@ -169,15 +169,19 @@ def create_config_writing():
         config_writing = ConfigWritingClean(
             config_writing_clean=ConfigWriting(
                 folder="/veld/output/data_clean/",
-                file_path=concatenate_folder_and_file("/veld/output/data_clean/", get_env_var("out_file_clean")),
+                file_path=concatenate_folder_and_file(
+                    "/veld/output/data_clean/", get_env_var("out_file_clean")
+                ),
             ),
             config_writing_dirty=ConfigWriting(
                 folder="/veld/output/data_dirty/",
-                file_path=concatenate_folder_and_file("/veld/output/data_dirty/", get_env_var("out_file_dirty")),
+                file_path=concatenate_folder_and_file(
+                    "/veld/output/data_dirty/", get_env_var("out_file_dirty")
+                ),
             ),
         )
         if not config_writing.config_writing_dirty.file_path:
-            config_writing.config_writing_dirty.file_path = "/tmp/tmp_dirty" 
+            config_writing.config_writing_dirty.file_path = "/tmp/tmp_dirty"
     elif processing_func_name == "split_sentences":
         config_writing = ConfigWritingTxt(
             folder=OUT_FOLDER,
@@ -231,7 +235,7 @@ def create_config_processing():
             regex_pattern_match=r"[^\w\s]",
             regex_pattern_replacement="",
         )
-    elif processing_func_name == "regex_replace": 
+    elif processing_func_name == "regex_replace":
         regex_pattern_match = get_env_var("regex_pattern_match", mandatory=True)
         regex_pattern_replacement = get_env_var("regex_pattern_replacement", mandatory=True)
         config_processing = ConfigProcessingRegexReplace(
@@ -322,7 +326,7 @@ def func_reading_txt(config_reading):
 def coroutine_writing_txt(config_writing):
     with open(config_writing.file_path, "w") as f:
         while True:
-            text = (yield)
+            text = yield
             if config_writing.set_delimit_by_newline:
                 text += "\n"
             f.write(text)
@@ -345,7 +349,7 @@ def func_processing_clean(config_processing, text):
             count_clean += 1
         else:
             count_dirty += 1
-    percentage_clean_char = (100 * count_clean)  / (count_clean + count_dirty)
+    percentage_clean_char = (100 * count_clean) / (count_clean + count_dirty)
     if percentage_clean_char >= config_processing.min_clean_char_percentage:
         yield (text, True)
     else:
@@ -393,7 +397,7 @@ def write_veld_data_yaml(config_writing_metadata, config_writing):
                 "additional": {
                     "data size": data_size,
                     "number of lines": num_lines,
-                }
+                },
             }
         }
     }
@@ -426,8 +430,8 @@ def merge_tmp_individual(config_writing, file_name_pattern=None):
 def merge_tmp_main(config_writing):
     print("joining tmp files into one.")
     if type(config_writing) is ConfigWritingClean:
-        merge_tmp_individual(config_writing.config_writing_clean, "clean") 
-        merge_tmp_individual(config_writing.config_writing_dirty, "dirty") 
+        merge_tmp_individual(config_writing.config_writing_clean, "clean")
+        merge_tmp_individual(config_writing.config_writing_dirty, "dirty")
     else:
         merge_tmp_individual(config_writing)
 
@@ -498,7 +502,7 @@ def create_segment_start_end_list_of_file(config_reading, num_segments):
     print("- creating index segments of file -----------------------------------")
     num_texts = count_texts(config_reading)
     config_reading_list = []
-    for start, end in  create_segment_start_end_list_of_quantity(num_texts, num_segments):
+    for start, end in create_segment_start_end_list_of_quantity(num_texts, num_segments):
         config_reading_copy = copy.copy(config_reading)
         config_reading_copy.segment_start = start
         config_reading_copy.segment_end = end
@@ -527,17 +531,30 @@ def adapt_config_to_tmp(config_writing, config_processing, process_id):
     if config_processing.cpu_count > 1:
         config_writing_per_process = copy.copy(config_writing)
         if type(config_writing_per_process) is ConfigWritingClean:
-            config_writing_per_process.config_writing_clean = copy.copy(config_writing.config_writing_clean)
-            config_writing_per_process.config_writing_dirty = copy.copy(config_writing.config_writing_dirty)
-            config_writing_per_process.config_writing_clean.file_path = (TMP_FOLDER + "tmp_clean_"
-                + str(process_id) + "." 
-                + get_filetype_of_config(config_writing.config_writing_clean))
-            config_writing_per_process.config_writing_dirty.file_path = (TMP_FOLDER + "tmp_dirty_" 
-                + str(process_id) + "." 
-                + get_filetype_of_config(config_writing.config_writing_dirty))
+            config_writing_per_process.config_writing_clean = copy.copy(
+                config_writing.config_writing_clean
+            )
+            config_writing_per_process.config_writing_dirty = copy.copy(
+                config_writing.config_writing_dirty
+            )
+            config_writing_per_process.config_writing_clean.file_path = (
+                TMP_FOLDER
+                + "tmp_clean_"
+                + str(process_id)
+                + "."
+                + get_filetype_of_config(config_writing.config_writing_clean)
+            )
+            config_writing_per_process.config_writing_dirty.file_path = (
+                TMP_FOLDER
+                + "tmp_dirty_"
+                + str(process_id)
+                + "."
+                + get_filetype_of_config(config_writing.config_writing_dirty)
+            )
         else:
-            config_writing_per_process.file_path = (TMP_FOLDER + "tmp_" + str(process_id)
-                + "." + get_filetype_of_config(config_writing))
+            config_writing_per_process.file_path = (
+                TMP_FOLDER + "tmp_" + str(process_id) + "." + get_filetype_of_config(config_writing)
+            )
     else:
         config_writing_per_process = config_writing
     return config_writing_per_process
@@ -567,7 +584,7 @@ def check_if_file_paths(config_reading, config_writing):
     if config_reading.file_path:
         if type(config_writing) is ConfigWritingClean:
             if config_writing.config_writing_clean.file_path:
-                return  True
+                return True
             else:
                 return False
         else:
@@ -602,7 +619,9 @@ def processing_chain_clean(config_processing, config_reading, config_writing, pr
     )
     for i_text, text in func_reading(config_reading):
         print_status(percentage_segment_dict, i_text, process_id)
-        for text_processed, is_text_processed_clean in func_processing_clean(config_processing, text):
+        for text_processed, is_text_processed_clean in func_processing_clean(
+            config_processing, text
+        ):
             if is_text_processed_clean:
                 coroutine_writing_clean.send(text_processed)
             else:
@@ -613,7 +632,7 @@ def processing_chain_clean(config_processing, config_reading, config_writing, pr
 
 def processing_chain_sample(config_processing, config_reading, config_writing):
     num_texts = count_texts(config_reading)
-    text_indices_list = list(range(0, num_texts))    
+    text_indices_list = list(range(0, num_texts))
     absolute_sample = int((len(text_indices_list) / 100) * config_processing.percentage_sample)
     random.seed(config_processing.sample_random_seed)
     rand_indices = set(random.sample(text_indices_list, absolute_sample))
@@ -644,19 +663,20 @@ def get_processing_chain(config_processing):
 def initiate_processing_multi(processing_chain, config_processing, config_reading, config_writing):
     DEBUG_SINGLE_PROCESS = True
     config_reading_list = create_segment_start_end_list_of_file(
-        config_reading, 
-        config_processing.cpu_count
+        config_reading, config_processing.cpu_count
     )
     process_list = []
     for process_id, config_reading_per_process in enumerate(config_reading_list):
-        config_writing_per_process = adapt_config_to_tmp(config_writing, config_processing, process_id)
+        config_writing_per_process = adapt_config_to_tmp(
+            config_writing, config_processing, process_id
+        )
         print(f"- process_id {process_id}: start -----------------------------------------------")
         if DEBUG_SINGLE_PROCESS:
             processing_chain(
                 config_processing,
                 config_reading_per_process,
                 config_writing_per_process,
-                process_id, 
+                process_id,
             )
         else:
             process = Process(
@@ -665,8 +685,8 @@ def initiate_processing_multi(processing_chain, config_processing, config_readin
                     config_processing,
                     config_reading_per_process,
                     config_writing_per_process,
-                    process_id, 
-                )
+                    process_id,
+                ),
             )
             process.start()
             process_list.append(process)
@@ -683,7 +703,9 @@ def initiate_processing(config_processing, config_reading, config_writing):
     if processing_chain is processing_chain_sample:
         processing_chain_sample(config_processing, config_reading, config_writing)
     else:
-        initiate_processing_multi(processing_chain, config_processing, config_reading, config_writing)
+        initiate_processing_multi(
+            processing_chain, config_processing, config_reading, config_writing
+        )
     print("- all processing done -----------------------------------------------")
 
 
@@ -692,7 +714,7 @@ def process_from_files(config_processing, config_reading, config_writing):
         initiate_processing(config_processing, config_reading, config_writing)
     else:
         for file in os.listdir(config_reading.folder):
-            if not(config_reading.ignore_file and file in config_reading.ignore_file):
+            if not (config_reading.ignore_file and file in config_reading.ignore_file):
                 print(f"processing file: {file}")
                 config_reading.file_path = config_reading.folder + file
                 if type(config_writing) is ConfigWritingClean:
@@ -702,11 +724,17 @@ def process_from_files(config_processing, config_reading, config_writing):
                     file_name_clean = file_name + "_clean"
                     file_name_dirty = file_name + "_dirty"
                     config_writing.config_writing_clean.file_path = (
-                        config_writing.config_writing_clean.folder + file_name_clean + "." 
-                        + file_type)
+                        config_writing.config_writing_clean.folder
+                        + file_name_clean
+                        + "."
+                        + file_type
+                    )
                     config_writing.config_writing_dirty.file_path = (
-                        config_writing.config_writing_dirty.folder + file_name_dirty + "." 
-                        + file_type)
+                        config_writing.config_writing_dirty.folder
+                        + file_name_dirty
+                        + "."
+                        + file_type
+                    )
                 else:
                     config_writing.file_path = config_writing.folder + file
                 config_reading = adapt_config_to_file_type(config_reading)
@@ -731,4 +759,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
