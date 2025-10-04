@@ -468,11 +468,10 @@ def count_texts_of_output_main(config_writing):
 
 
 def count_texts_in_file(config):
-    func_reading = get_func_reading(config)
-    i_text = 0
-    for i_text, _ in func_reading(config):
-        pass
-    num_texts = i_text + 1
+    num_texts = None
+    if type(config) is ConfigReadingTxt:
+        result = subprocess.run(['wc', '-l', config.file_path], capture_output=True, text=True)
+        num_texts = int(result.stdout.split()[0])
     return num_texts
 
 
@@ -641,14 +640,23 @@ def processing_chain_clean(config_processing, config_reading, config_writing, pr
 
 
 def processing_chain_sample(config_processing, config_reading, config_writing):
+    print("- counting texts ----------------------------------------------------")
     num_texts = count_texts(config_reading)
-    text_indices_list = list(range(0, num_texts))
-    absolute_sample = int((len(text_indices_list) / 100) * config_processing.percentage_sample)
+    print(f"num_texts: {num_texts}")
+    absolute_sample = int((num_texts / 100) * config_processing.percentage_sample)
+    rand_indices = set()
     random.seed(config_processing.sample_random_seed)
-    rand_indices = set(random.sample(text_indices_list, absolute_sample))
+    while len(rand_indices) < absolute_sample:
+        rand_int_in_set = False
+        while not rand_int_in_set:
+            rand_int = random.randint(0, num_texts - 1)
+            if rand_int not in rand_indices:
+                rand_indices.add(rand_int)
+                rand_int_in_set = True
     func_reading = get_func_reading(config_reading)
     coroutine_writing = get_coroutine_writing(config_writing)
     percentage_segment_dict = create_percentage_segment_dict(config_reading, 0, num_texts)
+    print("- sampling texts ----------------------------------------------------")
     for i_text, text in func_reading(config_reading):
         print_status(percentage_segment_dict, i_text, 0)
         if i_text in rand_indices:

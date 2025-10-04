@@ -48,4 +48,5 @@ services:
       out_data_description: null
       percentage_sample: null
       sample_random_seed: null
+      buffer_size: 1
 
