@@ -419,7 +419,7 @@ def write_veld_data_yaml(config_writing_metadata, config_writing):
 
 
 def merge_tmp_individual(config_writing, file_name_pattern=None):
-    with open(config_writing.file_path, "w") as f_out:
+    with open(config_writing.file_path, "wb") as f_out:
         tmp_file_path_list = []
         for file in os.listdir(TMP_FOLDER):
             file_name = file.split(".")[0]
@@ -436,8 +436,9 @@ def merge_tmp_individual(config_writing, file_name_pattern=None):
         tmp_file_path_list = sorted(tmp_file_path_list, key=lambda x: x[0])
         for _, tmp_file_path in tmp_file_path_list:
             if not file_name_pattern or file_name_pattern in tmp_file_path:
-                with open(tmp_file_path, "r") as f_in:
-                    f_out.write(f_in.read())
+                with open(tmp_file_path, "rb") as f_in:
+                    while chunk := f_in.read(65536):
+                        f_out.write(chunk)
 
 
 def merge_tmp_main(config_writing):
