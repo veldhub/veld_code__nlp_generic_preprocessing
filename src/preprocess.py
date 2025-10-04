@@ -510,8 +510,13 @@ def create_segment_start_end_list_of_file(config_reading, num_segments):
     return config_reading_list
 
 
-def create_percentage_segment_dict(config_reading, i_start, i_end):
+def create_percentage_segment_dict(config_reading, i_start=None, i_end=None):
     percentage_segment_dict = None
+    if i_start is None:
+        i_start = config_reading.segment_start
+    if i_end is None:
+        i_end = config_reading.segment_end
+    percentage_segment = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
     if not (type(config_reading) is ConfigReadingTxt and not config_reading.txt_has_lines):
         percentage_segment = create_segment_start_end_list_of_quantity(i_end - i_start, 100)
         percentage_segment = [e + i_start - 1 for s, e in percentage_segment]
@@ -600,9 +605,7 @@ def processing_chain_common(config_processing, config_reading, config_writing, p
     func_reading = get_func_reading(config_reading)
     func_processing = get_func_processing(config_processing)
     coroutine_writing = get_coroutine_writing(config_writing)
-    percentage_segment_dict = create_percentage_segment_dict(
-        config_reading, config_reading.segment_start, config_reading.segment_end
-    )
+    percentage_segment_dict = create_percentage_segment_dict(config_reading)
     for i_text, text in func_reading(config_reading):
         print_status(percentage_segment_dict, i_text, process_id)
         for text_processed in func_processing(config_processing, text):
@@ -614,9 +617,7 @@ def processing_chain_clean(config_processing, config_reading, config_writing, pr
     func_reading = get_func_reading(config_reading)
     coroutine_writing_clean = get_coroutine_writing(config_writing.config_writing_clean)
     coroutine_writing_dirty = get_coroutine_writing(config_writing.config_writing_dirty)
-    percentage_segment_dict = create_percentage_segment_dict(
-        config_reading, config_reading.segment_start, config_reading.segment_end
-    )
+    percentage_segment_dict = create_percentage_segment_dict(config_reading)
     for i_text, text in func_reading(config_reading):
         print_status(percentage_segment_dict, i_text, process_id)
         for text_processed, is_text_processed_clean in func_processing_clean(
