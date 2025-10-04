@@ -638,7 +638,11 @@ def processing_chain_sample(config_processing, config_reading, config_writing):
     rand_indices = set(random.sample(text_indices_list, absolute_sample))
     func_reading = get_func_reading(config_reading)
     coroutine_writing = get_coroutine_writing(config_writing)
+    percentage_segment_dict = create_percentage_segment_dict(
+        config_reading, 0, num_texts
+    )
     for i_text, text in func_reading(config_reading):
+        print_status(percentage_segment_dict, i_text, 0)
         if i_text in rand_indices:
             coroutine_writing.send(text)
     coroutine_writing.close()
