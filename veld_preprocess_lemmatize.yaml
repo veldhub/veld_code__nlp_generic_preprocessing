@@ -20,6 +20,5 @@ services:
       out_data_description: null
       spacy_model: null
       cpu_count: null
-      buffer_segments: 100
-
+      buffer_size: 1
 

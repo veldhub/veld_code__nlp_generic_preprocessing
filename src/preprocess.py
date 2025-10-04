@@ -38,6 +38,7 @@ class ConfigReadingTxt(ConfigReading):
 class ConfigWriting:
     folder: str = None
     file_path: str = None
+    buffer_size: int = None
 
 
 @dataclass
@@ -192,6 +193,7 @@ def create_config_writing():
         config_writing = ConfigWriting(
             folder=OUT_FOLDER,
             file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
+            buffer_size=get_env_var("buffer_size", int)
         )
     config_writing = adapt_config_to_file_type(config_writing)
     return config_writing
@@ -325,11 +327,18 @@ def func_reading_txt(config_reading):
 
 def coroutine_writing_txt(config_writing):
     with open(config_writing.file_path, "w") as f:
-        while True:
-            text = yield
-            if config_writing.set_delimit_by_newline:
-                text += "\n"
-            f.write(text)
+        try:
+            text_buffer = ""
+            while True:
+                text = yield
+                if config_writing.set_delimit_by_newline:
+                    text += "\n"
+                text_buffer += text
+                if sys.getsizeof(text_buffer) / (1024**3) > config_writing.buffer_size:
+                    f.write(text_buffer)
+                    text_buffer = ""
+        except GeneratorExit:
+            f.write(text_buffer)
 
 
 def func_processing_change_case(config_processing, text):
@@ -664,7 +673,7 @@ def get_processing_chain(config_processing):
 
 
 def initiate_processing_multi(processing_chain, config_processing, config_reading, config_writing):
-    DEBUG_SINGLE_PROCESS = True
+    DEBUG_SINGLE_PROCESS = False
     config_reading_list = create_segment_start_end_list_of_file(
         config_reading, config_processing.cpu_count
     )

@@ -12,4 +12,5 @@ services:
       in_file: null
       out_file: null
       cpu_count: 1
+      buffer_size: 1
   

@@ -53,4 +53,5 @@ services:
       out_file: null
       out_data_description: null
       cpu_count: 1
+      buffer_size: 1
 

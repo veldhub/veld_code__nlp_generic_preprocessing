@@ -62,4 +62,5 @@ services:
       min_percentage_char: null
       cpu_count: null
       txt_has_lines: null
+      buffer_size: 1
 
