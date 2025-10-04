@@ -77,7 +77,6 @@ class ConfigProcessingRegexReplace(ConfigProcessing):
 @dataclass
 class ConfigProcessingClean(ConfigProcessing):
     min_clean_char_percentage: float = None
-    append_to_file: bool = True
 
 
 @dataclass
@@ -158,6 +157,7 @@ def create_config_reading():
             **asdict(config_reading),
             txt_has_lines=txt_has_lines,
         )
+    config_reading = adapt_config_to_file_type(config_reading)
     return config_reading
 
 
@@ -187,6 +187,7 @@ def create_config_writing():
             folder=OUT_FOLDER,
             file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
         )
+    config_writing = adapt_config_to_file_type(config_writing)
     return config_writing
 
 
@@ -241,7 +242,6 @@ def create_config_processing():
         config_processing = ConfigProcessingClean(
             **asdict(config_processing),
             min_clean_char_percentage=get_env_var("min_percentage_char", float),
-            append_to_file=get_env_var_to_bool("append_to_file"),
         )
     elif processing_func_name == "split_sentences":
         config_processing = ConfigProcessingSplitSentences(
@@ -683,19 +683,8 @@ def initiate_processing(config_processing, config_reading, config_writing):
     print("- all processing done -----------------------------------------------")
 
 
-
-def main():
-
-    # config reading
-    print("- preparing --------------------------------------------------------")
-    config_reading = create_config_reading()
-    config_writing = create_config_writing()
-    config_writing_metadata = create_config_writing_metadata()
-    config_processing = create_config_processing()
-
+def process_from_files(config_processing, config_reading, config_writing):
     if check_if_file_paths(config_reading, config_writing):
-        config_reading = adapt_config_to_file_type(config_reading)
-        config_writing = adapt_config_to_file_type(config_writing)
         initiate_processing(config_processing, config_reading, config_writing)
     else:
         for file in os.listdir(config_reading.folder):
@@ -706,12 +695,8 @@ def main():
                     file_split = file.split(".")
                     file_name = "".join(file_split[:-1])
                     file_type = file_split[-1]
-                    if config_processing.append_to_file:
-                        file_name_clean = file_name + "_clean"
-                        file_name_dirty = file_name + "_dirty"
-                    else:
-                        file_name_clean = file_name
-                        file_name_dirty = file_name
+                    file_name_clean = file_name + "_clean"
+                    file_name_dirty = file_name + "_dirty"
                     config_writing.config_writing_clean.file_path = (
                         config_writing.config_writing_clean.folder + file_name_clean + "." 
                         + file_type)
@@ -723,12 +708,19 @@ def main():
                 config_reading = adapt_config_to_file_type(config_reading)
                 config_writing = adapt_config_to_file_type(config_writing)
                 initiate_processing(config_processing, config_reading, config_writing)
-                config_reading.file_path = None
-                if type(config_writing) is ConfigWritingClean:
-                    config_writing.config_writing_clean.file_path = None
-                    config_writing.config_writing_dirty.file_path = None
 
-    # write metadata
+
+def main():
+    print("- preparing --------------------------------------------------------")
+    config_reading = create_config_reading()
+    config_writing = create_config_writing()
+    config_writing_metadata = create_config_writing_metadata()
+    config_processing = create_config_processing()
+    if type(config_reading) is ConfigReadingTxt:
+        process_from_files(config_processing, config_reading, config_writing)
+    else:
+        # placeholder for non-file readers, e.g. sql
+        pass
     if config_writing_metadata:
         write_veld_data_yaml(config_writing_metadata, config_writing)
 
