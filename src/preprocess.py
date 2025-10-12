@@ -477,7 +477,7 @@ def count_texts_of_output_main(config_writing):
 def count_texts_in_file(config):
     num_texts = None
     if type(config) is ConfigReadingTxt:
-        result = subprocess.run(['wc', '-l', config.file_path], capture_output=True, text=True)
+        result = subprocess.run(["wc", "-l", config.file_path], capture_output=True, text=True)
         num_texts = int(result.stdout.split()[0])
     return num_texts
 
