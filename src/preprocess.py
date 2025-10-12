@@ -133,7 +133,9 @@ def get_env_var_to_bool(var_name):
         elif var_content.lower() == "false":
             return False
         else:
-            raise Exception(f"Wrong value for a boolean variable: {var_content}")
+            raise Exception(
+                f"Wrong value for boolean: var_name: '{var_name}', var_content: '{var_content}'"
+            )
     else:
         return None
 
