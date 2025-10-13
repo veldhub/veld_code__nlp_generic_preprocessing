@@ -38,6 +38,6 @@ services:
       out_file: null
       out_data_description: null
       set_case: null
-      cpu_count: 1
+      cpu_count: null
       buffer_size: 1
 

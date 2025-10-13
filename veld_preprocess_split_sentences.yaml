@@ -11,6 +11,6 @@ services:
     environment:
       in_file: null
       out_file: null
-      cpu_count: 1
+      txt_has_lines: false
       buffer_size: 1
   
