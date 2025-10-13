@@ -172,6 +172,7 @@ def create_config_reading():
 
 def create_config_writing():
     processing_func_name = get_processing_func_name()
+    buffer_size = get_env_var("buffer_size", int)
     if processing_func_name == "clean":
         config_writing = ConfigWritingClean(
             config_writing_clean=ConfigWriting(
@@ -179,14 +180,14 @@ def create_config_writing():
                 file_path=concatenate_folder_and_file(
                     OUT_FOLDER_CLEAN, get_env_var("out_file_clean")
                 ),
-                buffer_size=get_env_var("buffer_size", int),
+                buffer_size=buffer_size,
             ),
             config_writing_dirty=ConfigWriting(
                 folder=OUT_FOLDER_DIRTY,
                 file_path=concatenate_folder_and_file(
                     OUT_FOLDER_DIRTY, get_env_var("out_file_dirty")
                 ),
-                buffer_size=get_env_var("buffer_size", int),
+                buffer_size=buffer_size,
             ),
         )
         if not config_writing.config_writing_dirty.file_path:
@@ -196,12 +197,13 @@ def create_config_writing():
             folder=OUT_FOLDER,
             file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
             set_delimit_by_newline=True,
+            buffer_size=buffer_size,
         )
     else:
         config_writing = ConfigWriting(
             folder=OUT_FOLDER,
             file_path=concatenate_folder_and_file(OUT_FOLDER, get_env_var("out_file")),
-            buffer_size=get_env_var("buffer_size", int),
+            buffer_size=buffer_size,
         )
     config_writing = adapt_config_to_file_type(config_writing)
     return config_writing
