@@ -1,0 +1,26 @@
+# TODO: add metadata
+x-veld:
+  code:
+    description:
+    topic:
+      - "NLP"
+      - "Preprocessing"
+      - "ETL"
+
+    input:
+
+    output:
+
+    config:
+
+services:
+  veld_remove_whitespace:
+    build: .
+    volumes:
+      - ./src/:/veld/code/:z
+    command: python -u /veld/code/preprocess.py remove_whitespace
+    environment:
+      in_file: null
+      out_file: null
+      buffer_size: 1
+

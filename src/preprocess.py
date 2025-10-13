@@ -100,6 +100,11 @@ class ConfigProcessingSample(ConfigProcessing):
     percentage_sample: float = None
 
 
+@dataclass
+class ConfigProcessingRemoveWhitespace(ConfigProcessing):
+    pass
+
+
 def get_env_var(var_name, cast_func=None, mandatory=False, default=None):
     var_content = os.getenv(var_name)
     if var_content is not None:
@@ -281,6 +286,10 @@ def create_config_processing():
             sample_random_seed=get_env_var("sample_random_seed", str),
             percentage_sample=get_env_var("percentage_sample", float),
         )
+    elif processing_func_name == "remove_whitespace":
+        config_processing = ConfigProcessingRemoveWhitespace(
+            **asdict(config_processing),
+        )
     else:
         raise Exception(
             f"could not determine config_processing for func_name: {processing_func_name}"
@@ -315,6 +324,8 @@ def get_func_processing(config_processing):
         return func_processing_split_sentences
     elif type(config_processing) is ConfigProcessingLemmatize:
         return func_processing_lemmatize
+    elif type(config_processing) is ConfigProcessingRemoveWhitespace:
+        return func_processing_remove_whitespace
     else:
         raise Exception(f"no registered function for {config_processing}")
 
@@ -395,6 +406,10 @@ def func_processing_split_sentences(config_processing, text):
 def func_processing_lemmatize(config_processing, text):
     doc = config_processing.nlp(text)
     yield " ".join([t.lemma_ for t in doc])
+
+
+def func_processing_remove_whitespace(config_processing, text):
+    yield re.sub(r"[^\S\n]+", " ", text)
 
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
@@ -683,6 +698,7 @@ def get_processing_chain(config_processing):
         ConfigProcessingRegexReplace,
         ConfigProcessingSplitSentences,
         ConfigProcessingLemmatize,
+        ConfigProcessingRemoveWhitespace,
     ]:
         return processing_chain_common
     elif type(config_processing) is ConfigProcessingClean:
