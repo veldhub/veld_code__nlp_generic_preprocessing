@@ -490,11 +490,10 @@ def count_texts_in_file(config):
 
 
 def count_chars_in_text(config):
-    with open(config.file_path, "r") as f_in:
-        func_reading = get_func_reading(config)
-        text_all = ""
-        for _, text in func_reading(config, f_in):
-            text_all += text
+    func_reading = get_func_reading(config)
+    text_all = ""
+    for _, text in func_reading(config):
+        text_all += text
     return len(text_all)
 
 
