@@ -16,6 +16,8 @@ from nltk.tokenize import sent_tokenize
 
 IN_FOLDER = "/veld/input/"
 OUT_FOLDER = "/veld/output/data/"
+OUT_FOLDER_CLEAN = "/veld/output/data_clean/"
+OUT_FOLDER_DIRTY = "/veld/output/data_dirty/"
 OUT_METADATA_FOLDER = "/veld/output/metadata/"
 TMP_FOLDER = "/veld/output/tmp/"
 
@@ -173,16 +175,16 @@ def create_config_writing():
     if processing_func_name == "clean":
         config_writing = ConfigWritingClean(
             config_writing_clean=ConfigWriting(
-                folder="/veld/output/data_clean/",
+                folder=OUT_FOLDER_CLEAN,
                 file_path=concatenate_folder_and_file(
-                    "/veld/output/data_clean/", get_env_var("out_file_clean")
+                    OUT_FOLDER_CLEAN, get_env_var("out_file_clean")
                 ),
                 buffer_size=get_env_var("buffer_size", int),
             ),
             config_writing_dirty=ConfigWriting(
-                folder="/veld/output/data_dirty/",
+                folder=OUT_FOLDER_DIRTY,
                 file_path=concatenate_folder_and_file(
-                    "/veld/output/data_dirty/", get_env_var("out_file_dirty")
+                    OUT_FOLDER_DIRTY, get_env_var("out_file_dirty")
                 ),
                 buffer_size=get_env_var("buffer_size", int),
             ),
