@@ -262,6 +262,9 @@ def create_config_processing():
             min_clean_char_percentage=get_env_var("min_percentage_char", float),
         )
     elif processing_func_name == "split_sentences":
+        if config_processing.cpu_count > 1:
+            config_processing.cpu_count = 1
+            print("cpu_count set to 1 with 'split_sentences' function")
         config_processing = ConfigProcessingSplitSentences(
             **asdict(config_processing),
             language=get_env_var("language", mandatory=True),
