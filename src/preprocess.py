@@ -446,7 +446,7 @@ def merge_tmp_individual(config_writing, file_name_pattern=None):
     with open(config_writing.file_path, "wb") as f_out:
         tmp_file_path_list = []
         for file in os.listdir(TMP_FOLDER):
-            if bool(re.match(r"^tmp_\d+\.txt$", file)):
+            if bool(re.match(r"^tmp_\d+\.txt$", file)) or file_name_pattern in file:
                 file_name = file.split(".")[0]
                 number = ""
                 for char in file_name[::-1]:
