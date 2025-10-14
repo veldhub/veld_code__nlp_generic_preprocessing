@@ -19,7 +19,7 @@ OUT_FOLDER = "/veld/output/data/"
 OUT_FOLDER_CLEAN = "/veld/output/data_clean/"
 OUT_FOLDER_DIRTY = "/veld/output/data_dirty/"
 OUT_METADATA_FOLDER = "/veld/output/metadata/"
-TMP_FOLDER = "/veld/output/tmp/"
+TMP_FOLDER = "/veld/tmp/output/"
 
 
 @dataclass
