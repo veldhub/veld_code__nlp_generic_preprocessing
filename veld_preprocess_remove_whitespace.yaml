@@ -14,7 +14,7 @@ x-veld:
     config:
 
 services:
-  veld_remove_whitespace:
+  veld_preprocess_remove_whitespace:
     build: .
     volumes:
       - ./src/:/veld/code/:z
