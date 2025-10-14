@@ -446,17 +446,18 @@ def merge_tmp_individual(config_writing, file_name_pattern=None):
     with open(config_writing.file_path, "wb") as f_out:
         tmp_file_path_list = []
         for file in os.listdir(TMP_FOLDER):
-            file_name = file.split(".")[0]
-            number = ""
-            for char in file_name[::-1]:
-                try:
-                    int(char)
-                except:
-                    break
-                else:
-                    number += char
-            number = int(number[::-1])
-            tmp_file_path_list.append((number, TMP_FOLDER + file))
+            if bool(re.match(r"^tmp_\d+\.txt$", file)):
+                file_name = file.split(".")[0]
+                number = ""
+                for char in file_name[::-1]:
+                    try:
+                        int(char)
+                    except:
+                        break
+                    else:
+                        number += char
+                number = int(number[::-1])
+                tmp_file_path_list.append((number, TMP_FOLDER + file))
         tmp_file_path_list = sorted(tmp_file_path_list, key=lambda x: x[0])
         for _, tmp_file_path in tmp_file_path_list:
             if not file_name_pattern or file_name_pattern in tmp_file_path:
