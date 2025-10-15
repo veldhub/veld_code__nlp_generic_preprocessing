@@ -22,5 +22,6 @@ services:
     environment:
       in_file: null
       out_file: null
+      cpu_count: null
       buffer_size: 1
 
