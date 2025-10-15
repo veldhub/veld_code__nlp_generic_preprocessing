@@ -1,2 +1,5 @@
 **/__pycache__
 /data/storage/spacy_cache/
+/*.def
+/*.sif
+
