@@ -105,6 +105,11 @@ class ConfigProcessingRemoveWhitespace(ConfigProcessing):
     pass
 
 
+@dataclass
+class ConfigProcessingRemovePunctuation(ConfigProcessing):
+    nlp: spacy.lang = None
+
+
 def get_env_var(var_name, cast_func=None, mandatory=False, default=None):
     var_content = os.getenv(var_name)
     if var_content is not None:
@@ -247,10 +252,10 @@ def create_config_processing():
             set_case=get_env_var("set_case"),
         )
     elif processing_func_name == "remove_punctuation":
-        config_processing = ConfigProcessingRegexReplace(
+        nlp = spacy.load(get_env_var("spacy_model", mandatory=True))
+        config_processing = ConfigProcessingRemovePunctuation(
             **asdict(config_processing),
-            regex_pattern_match=r"[^\w\s]",
-            regex_pattern_replacement="",
+            nlp=nlp,
         )
     elif processing_func_name == "regex_replace":
         regex_pattern_match = get_env_var("regex_pattern_match", mandatory=True)
@@ -326,6 +331,8 @@ def get_func_processing(config_processing):
         return func_processing_lemmatize
     elif type(config_processing) is ConfigProcessingRemoveWhitespace:
         return func_processing_remove_whitespace
+    elif type(config_processing) is ConfigProcessingRemovePunctuation:
+        return func_processing_remove_punctuation
     else:
         raise Exception(f"no registered function for {config_processing}")
 
@@ -410,6 +417,11 @@ def func_processing_lemmatize(config_processing, text):
 
 def func_processing_remove_whitespace(config_processing, text):
     yield re.sub(r"[^\S\n]+", " ", text)
+
+
+def func_processing_remove_punctuation(config_processing, text):
+    doc = config_processing.nlp(text)
+    yield " ".join([token.text for token in doc if not token.is_punct])
 
 
 def write_veld_data_yaml(config_writing_metadata, config_writing):
@@ -703,6 +715,7 @@ def get_processing_chain(config_processing):
         ConfigProcessingSplitSentences,
         ConfigProcessingLemmatize,
         ConfigProcessingRemoveWhitespace,
+        ConfigProcessingRemovePunctuation,
     ]:
         return processing_chain_common
     elif type(config_processing) is ConfigProcessingClean:

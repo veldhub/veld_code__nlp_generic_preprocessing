@@ -46,12 +46,14 @@ services:
   veld_preprocess_remove_punctuation:
     build: .
     volumes:
+      - ./data/storage/spacy_cache/:/veld/storage/spacy_cache/
       - ./src/:/veld/code/:z
     command: python -u /veld/code/preprocess.py remove_punctuation
     environment:
       in_file: null
       out_file: null
       out_data_description: null
+      spacy_model: null
       cpu_count: null
       buffer_size: 1
 
