@@ -6,6 +6,7 @@ import subprocess
 import sys
 import unicodedata
 from dataclasses import dataclass, asdict
+from datetime import datetime
 from multiprocessing import Process
 from typing import List
 
@@ -772,7 +773,6 @@ def initiate_processing(config_processing, config_reading, config_writing):
         initiate_processing_multi(
             processing_chain, config_processing, config_reading, config_writing
         )
-    print("- all processing done -----------------------------------------------")
 
 
 def process_from_files(config_processing, config_reading, config_writing):
@@ -810,6 +810,7 @@ def process_from_files(config_processing, config_reading, config_writing):
 
 def main():
     print("- preparing --------------------------------------------------------")
+    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     config_reading = create_config_reading()
     config_writing = create_config_writing()
     config_writing_metadata = create_config_writing_metadata()
@@ -821,6 +822,8 @@ def main():
         pass
     if config_writing_metadata:
         write_veld_data_yaml(config_writing_metadata, config_writing)
+    print("- all processing done -----------------------------------------------")
+    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
 if __name__ == "__main__":
