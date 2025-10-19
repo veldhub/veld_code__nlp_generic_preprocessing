@@ -7,6 +7,7 @@ import sys
 import unicodedata
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from itertools import islice
 from multiprocessing import Process
 from typing import List
 
@@ -345,16 +346,12 @@ def get_filetype_of_config(config_reading_or_writing):
 
 def func_reading_txt(config_reading):
     with open(config_reading.file_path, "r") as f_in:
-        if config_reading.segment_start is not None and config_reading.segment_end is not None:
-            for i_text, text in enumerate(f_in):
-                if i_text >= config_reading.segment_start:
-                    if i_text < config_reading.segment_end:
-                        yield (i_text, text)
-                    else:
-                        break
-        else:
-            for i_text, text in enumerate(f_in):
-                yield (i_text, text)
+        sliced_lines = islice(f_in, config_reading.segment_start, config_reading.segment_end)
+        enum_start = config_reading.segment_start
+        if enum_start is None:
+            enum_start = 0
+        for i_text, text in enumerate(sliced_lines, start=enum_start):
+            yield (i_text, text)
 
 
 def coroutine_writing_txt(config_writing):
