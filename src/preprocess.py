@@ -254,7 +254,7 @@ def create_config_processing():
             set_case=get_env_var("set_case"),
         )
     elif processing_func_name == "remove_punctuation":
-        nlp = spacy.load(get_env_var("spacy_model", mandatory=True))
+        nlp = spacy.load(get_env_var("spacy_model", mandatory=True), disable=["parser", "ner"])
         config_processing = ConfigProcessingRemovePunctuation(
             **asdict(config_processing),
             nlp=nlp,
@@ -410,7 +410,7 @@ def func_processing_split_sentences(config_processing, text):
 
 def func_processing_lemmatize(config_processing, text):
     doc = config_processing.nlp(text)
-    yield " ".join([t.lemma_ for t in doc])
+    yield " ".join(t.lemma_ for t in doc)
 
 
 def func_processing_remove_whitespace(config_processing, text):
