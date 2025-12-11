@@ -100,6 +100,7 @@ class ConfigProcessingLemmatize(ConfigProcessing):
 class ConfigProcessingSample(ConfigProcessing):
     sample_random_seed: str = None
     percentage_sample: float = None
+    absolute_sample: float = None
 
 
 @dataclass
@@ -120,7 +121,7 @@ def get_env_var(var_name, cast_func=None, mandatory=False, default=None):
         var_content = default
     elif mandatory:
         raise Exception(f"environment variable: '{var_name}' is mandatory")
-    if cast_func:
+    if var_content is not None and cast_func:
         try:
             var_content = cast_func(var_content)
         except:
@@ -292,6 +293,7 @@ def create_config_processing():
             **asdict(config_processing),
             sample_random_seed=get_env_var("sample_random_seed", str),
             percentage_sample=get_env_var("percentage_sample", float),
+            absolute_sample=get_env_var("absolute_sample", float),
         )
     elif processing_func_name == "remove_whitespace":
         config_processing = ConfigProcessingRemoveWhitespace(
@@ -685,7 +687,10 @@ def processing_chain_sample(config_processing, config_reading, config_writing):
     print("- counting texts ----------------------------------------------------")
     num_texts = count_texts(config_reading)
     print(f"num_texts: {num_texts}")
-    absolute_sample = int((num_texts / 100) * config_processing.percentage_sample)
+    if config_processing.percentage_sample:
+        absolute_sample = int((num_texts / 100) * config_processing.percentage_sample)
+    else:
+        absolute_sample = config_processing.absolute_sample
     rand_indices = set()
     random.seed(config_processing.sample_random_seed)
     while len(rand_indices) < absolute_sample:
